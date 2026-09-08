@@ -63,16 +63,25 @@ export const MapViewPage: React.FC = () => {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-        setIsLocating(false);
-        setGpsStatusMsg('📍 Live GPS Coordinates Applied!');
-        setTimeout(() => setGpsStatusMsg(null), 3000);
+        const distFromCenter = calculateDistanceKm(pos.coords.latitude, pos.coords.longitude, 8.4184, 77.8732);
+        if (distFromCenter > 35) {
+          // Remote GPS detected (>35 km away). Auto-center at Tisaiyanvilai demo region so 2km / 5km surrounding nodes are visible!
+          setUserCoords({ lat: 8.4184, lon: 77.8732 });
+          setIsLocating(false);
+          setGpsStatusMsg(`📍 Live GPS detected (${Math.round(distFromCenter)} km away). Centered at Tisaiyanvilai so 2km/5km facilities show!`);
+          setTimeout(() => setGpsStatusMsg(null), 4500);
+        } else {
+          setUserCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+          setIsLocating(false);
+          setGpsStatusMsg('📍 Live GPS Coordinates Applied!');
+          setTimeout(() => setGpsStatusMsg(null), 3000);
+        }
       },
       (err) => {
         console.warn('GPS access error:', err);
         setIsLocating(false);
         setUserCoords({ lat: 8.4184, lon: 77.8732 });
-        setGpsStatusMsg('Location permission unavailable. Centered at Tisaiyanvilai 627657.');
+        setGpsStatusMsg('Location permission unavailable. Centered at Tisaiyanvilai (627657).');
         setTimeout(() => setGpsStatusMsg(null), 3500);
       },
       { enableHighAccuracy: true, timeout: 8000 }
@@ -161,19 +170,35 @@ export const MapViewPage: React.FC = () => {
             </p>
           </div>
 
-          {/* GPS Location Button */}
+          {/* GPS Location Buttons */}
           <div className="flex flex-col items-start md:items-end gap-1.5">
-            <button
-              type="button"
-              onClick={handleDetectGPS}
-              disabled={isLocating}
-              className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all cursor-pointer"
-            >
-              <LocateFixed className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-              <span>{isLocating ? 'Detecting Location...' : '📍 Use Current GPS Location'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDetectGPS}
+                disabled={isLocating}
+                className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all cursor-pointer"
+              >
+                <LocateFixed className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+                <span>{isLocating ? 'Detecting Location...' : '📍 Use Current GPS'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUserCoords({ lat: 8.4184, lon: 77.8732 });
+                  setGpsStatusMsg('📍 Centered at Tisaiyanvilai Center (627657)');
+                  setTimeout(() => setGpsStatusMsg(null), 2500);
+                }}
+                className="px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-blue-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-white/10"
+                title="Reset map center to Tisaiyanvilai 627657"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reset Center</span>
+              </button>
+            </div>
             <span className="text-[11px] text-blue-300/80">
-              Center: {userCoords.lat.toFixed(4)}, {userCoords.lon.toFixed(4)}
+              Center: {userCoords.lat.toFixed(4)}, {userCoords.lon.toFixed(4)} (Tisaiyanvilai 627657)
             </span>
             {gpsStatusMsg && (
               <span className="text-[11px] text-emerald-300 font-bold animate-pulse">{gpsStatusMsg}</span>
@@ -296,9 +321,9 @@ export const MapViewPage: React.FC = () => {
         </div>
 
         <MedMap
-          sources={activeSources}
+          sources={filteredFacilities}
           inventories={inventory}
-          height="540px"
+          height="clamp(340px, 48vh, 500px)"
           showFilters={false}
           filterType={categoryFilter}
           onFilterTypeChange={setCategoryFilter}
@@ -313,16 +338,16 @@ export const MapViewPage: React.FC = () => {
         />
       </div>
 
-      {/* FACILITIES DIRECTORY DOWN BELOW THE MAP (FILTERED EXACTLY BY CATEGORY & RADIUS) */}
+      {/* FACILITIES DIRECTORY DOWN BELOW THE MAP (FILTERED EXACTLY BY CATEGORY & RADIUS, 4 CARDS PER ROW) */}
       <div className="space-y-4 pt-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
-            <h3 className="text-base font-extrabold text-slate-900">
+            <h3 className="text-base sm:text-lg font-black text-slate-900">
               {categoryFilter === 'ALL'
-                ? 'All Healthcare Facilities'
+                ? 'All Healthcare Facilities & Hospitals'
                 : categoryFilter === 'PHARMACY'
-                ? 'Pharmacies'
-                : 'Multi-Speciality Hospitals'}{' '}
+                ? 'Pharmacies & Drug Stores'
+                : 'Multi-Speciality Hospitals & Emergency Centers'}{' '}
               in Tisaiyanvilai (627657)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -346,84 +371,109 @@ export const MapViewPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Directory Grid */}
+        {/* Directory Grid - 4 CARDS PER ROW WITH RECTANGULAR IMAGES */}
         {filteredFacilities.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {filteredFacilities.map((s) => (
               <div
                 key={s.id}
-                className="rounded-3xl bg-white border border-slate-200 shadow-xs hover:border-blue-300 hover:shadow-md transition-all text-xs flex flex-col justify-between overflow-hidden group"
+                className="rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:border-blue-400 hover:shadow-xl transition-all duration-300 text-xs flex flex-col justify-between overflow-hidden group hover:-translate-y-1"
               >
-                {/* Facility Image Cover */}
-                <div className="w-full h-28 relative bg-slate-100 overflow-hidden flex-shrink-0">
+                {/* Facility Image Cover - RECTANGULAR PROPORTIONS (16:10) */}
+                <div className="w-full aspect-[16/10] relative bg-slate-100 overflow-hidden flex-shrink-0">
                   <img
-                    src={s.imageUrl || s.logoUrl || 'https://images.unsplash.com/photo-1586015555751-63c237841c7b?w=800&auto=format&fit=crop&q=80'}
+                    src={s.imageUrl || s.logoUrl || 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80'}
                     alt={s.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
+                  
+                  {/* Top-Left Facility Type Badge */}
+                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
                     <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md backdrop-blur-md ${
-                        s.type === 'HOSPITAL' ? 'bg-indigo-600/90 text-white' : 'bg-teal-600/90 text-white'
+                      className={`text-[9.5px] font-black uppercase px-2.5 py-1 rounded-lg backdrop-blur-md shadow-xs flex items-center gap-1 text-white ${
+                        s.type === 'HOSPITAL' ? 'bg-indigo-600/90' : 'bg-teal-600/90'
                       }`}
                     >
-                      {s.type}
+                      {s.type === 'HOSPITAL' ? <Hospital className="w-3 h-3" /> : <Building2 className="w-3 h-3" />}
+                      <span>{s.type}</span>
                     </span>
+                    {s.isVerified && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg bg-blue-600/90 text-white backdrop-blur-md flex items-center gap-0.5 shadow-xs">
+                        <ShieldCheck className="w-2.5 h-2.5" />
+                        <span>Verified</span>
+                      </span>
+                    )}
                   </div>
-                  {/* Distance Pill */}
-                  <span className="absolute top-2.5 right-2.5 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-600 text-white flex items-center gap-1 shadow-sm">
+
+                  {/* Top-Right Distance Pill */}
+                  <span className="absolute top-2.5 right-2.5 text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-600 text-white flex items-center gap-1 shadow-md">
                     <MapPin className="w-3 h-3" />
                     <span>{s.distanceKm.toFixed(1)} km</span>
                   </span>
+
+                  {/* Bottom Image Overlay Title */}
+                  <div className="absolute bottom-2.5 left-3 right-3">
+                    <h4 className="font-black text-white text-[13px] leading-tight drop-shadow-md line-clamp-1 group-hover:text-blue-200 transition-colors">
+                      {s.name}
+                    </h4>
+                  </div>
                 </div>
 
-                <div className="p-4 sm:p-5 space-y-3 flex-1 flex flex-col justify-between">
+                {/* Card Body */}
+                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-1">
-                    <h4 className="font-extrabold text-slate-900 text-sm leading-tight">{s.name}</h4>
-                    <p className="text-slate-500 leading-relaxed text-[11px] line-clamp-2">{s.address}</p>
+                    <p className="text-slate-500 leading-relaxed text-[11px] line-clamp-2 flex items-start gap-1">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
+                      <span>{s.address}</span>
+                    </p>
                   </div>
 
                   {/* Travel Estimate & 24x7 Tag */}
-                  <div className="flex items-center justify-between text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
-                    <span className="font-semibold text-blue-700">
-                      🚗 ~{s.estMinutes} mins drive • 🚶 ~{Math.round(s.distanceKm * 12)} mins walk
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <span className="font-semibold text-blue-700 text-[10.5px]">
+                      🚗 ~{s.estMinutes}m • 🚶 ~{Math.round(s.distanceKm * 12)}m
                     </span>
-                    {s.emergencySupport24x7 && (
-                      <span className="font-black text-red-600 text-[10px] uppercase">
+                    {s.emergencySupport24x7 ? (
+                      <span className="font-black text-red-600 text-[9.5px] uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
                         24x7 Emergency
+                      </span>
+                    ) : (
+                      <span className="text-[9.5px] font-bold text-slate-500">
+                        Day Hours
                       </span>
                     )}
                   </div>
 
                   {/* Stock Availability Info */}
-                  <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
                     <span className="text-slate-500">
-                      <strong>{s.batchCount}</strong> medicine batches in stock
+                      <strong className="text-slate-800">{s.batchCount}</strong> batches in stock
                     </span>
-                    <span className="font-bold text-emerald-700">{s.operatingHours}</span>
+                    <span className="font-bold text-emerald-700 truncate max-w-[110px] text-[10.5px]">{s.operatingHours}</span>
                   </div>
-                </div>
 
-                {/* Actions */}
-                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveRouteSource(s)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition-colors"
-                  >
-                    <Navigation className="w-3.5 h-3.5" />
-                    <span>Get Route</span>
-                  </button>
+                  {/* Actions */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveRouteSource(s)}
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition-colors"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>Get Route</span>
+                    </button>
 
-                  <a
-                    href={`tel:${s.phone}`}
-                    className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition-colors"
-                    title="Call Facility"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Call</span>
-                  </a>
+                    <a
+                      href={`tel:${s.phone}`}
+                      className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                      title="Call Facility"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Call</span>
+                    </a>
+                  </div>
                 </div>
               </div>
             ))}
@@ -439,7 +489,7 @@ export const MapViewPage: React.FC = () => {
             <p className="text-xs text-slate-500 max-w-md mx-auto">
               There are no {categoryFilter.toLowerCase()} nodes located strictly within {radiusKm} km of your current coordinates in Tisaiyanvilai.
             </p>
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setRadiusKm(5)}
@@ -447,15 +497,26 @@ export const MapViewPage: React.FC = () => {
               >
                 Expand Radius to 5 km
               </button>
-              {categoryFilter !== 'ALL' && (
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter('ALL')}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
-                >
-                  Show All Categories
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setRadiusKm(999)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer shadow-sm"
+              >
+                Show All Distances (15 Facilities)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUserCoords({ lat: 8.4184, lon: 77.8732 });
+                  setRadiusKm(2);
+                  setCategoryFilter('ALL');
+                  setSelectedMedId('ALL');
+                  setSearchQuery('');
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Reset to Tisaiyanvilai Center
+              </button>
             </div>
           </div>
         )}

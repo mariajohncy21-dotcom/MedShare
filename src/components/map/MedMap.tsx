@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { MedicalSource, InventoryItem } from '../../types';
 import {
@@ -93,6 +93,33 @@ const createUserLocationIcon = () => {
     iconAnchor: [11, 11],
     popupAnchor: [0, -11],
   });
+};
+
+const MapController: React.FC<{
+  center: [number, number];
+  radiusKm: number;
+  filteredSources: MedicalSource[];
+}> = ({ center, radiusKm, filteredSources }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    try {
+      if (filteredSources.length > 0) {
+        const bounds = L.latLngBounds([
+          center,
+          ...filteredSources.map((s) => [s.latitude, s.longitude] as [number, number]),
+        ]);
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true });
+      } else {
+        const z = radiusKm <= 2 ? 14 : radiusKm <= 5 ? 13 : radiusKm <= 10 ? 12 : 11;
+        map.setView(center, z, { animate: true });
+      }
+    } catch (e) {
+      console.warn('Map bounds fit note:', e);
+    }
+  }, [center[0], center[1], radiusKm, filteredSources.length, map]);
+
+  return null;
 };
 
 interface MedMapProps {
@@ -192,12 +219,22 @@ export const MedMap: React.FC<MedMapProps> = ({
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        setUserCoords(coords);
-        setIsLocating(false);
-        setGpsActive(true);
-        setLocationStatusMsg('GPS Coordinates Detected!');
-        setTimeout(() => setLocationStatusMsg(null), 3000);
+        const distFromCenter = calculateDistanceKm(pos.coords.latitude, pos.coords.longitude, 8.4184, 77.8732);
+        if (distFromCenter > 35) {
+          // Remote GPS location detected (>35 km away). Keep Tisaiyanvilai so 2km / 5km surrounding nodes are visible!
+          setUserCoords({ lat: 8.4184, lon: 77.8732 });
+          setIsLocating(false);
+          setGpsActive(true);
+          setLocationStatusMsg(`📍 Live GPS detected (${Math.round(distFromCenter)} km away). Centered at Tisaiyanvilai so 2km/5km facilities show!`);
+          setTimeout(() => setLocationStatusMsg(null), 4500);
+        } else {
+          const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          setUserCoords(coords);
+          setIsLocating(false);
+          setGpsActive(true);
+          setLocationStatusMsg('📍 Live GPS Coordinates Applied!');
+          setTimeout(() => setLocationStatusMsg(null), 3000);
+        }
       },
       (err) => {
         console.warn('GPS location access denied or timed out:', err);
@@ -205,7 +242,7 @@ export const MedMap: React.FC<MedMapProps> = ({
         const fallback = { lat: 8.4184, lon: 77.8732 };
         setUserCoords(fallback);
         setGpsActive(false);
-        setLocationStatusMsg('Location permission was not granted. Using Tisaiyanvilai center.');
+        setLocationStatusMsg('Location permission unavailable. Centered at Tisaiyanvilai (627657).');
         setTimeout(() => setLocationStatusMsg(null), 3500);
       },
       { enableHighAccuracy: true, timeout: 8000 }
@@ -230,7 +267,7 @@ export const MedMap: React.FC<MedMapProps> = ({
 
       // Distance filter based on userCoords
       const dist = calculateDistanceKm(userCoords.lat, userCoords.lon, s.latitude, s.longitude);
-      if (dist > radiusKm) return false;
+      if (radiusKm < 999 && dist > radiusKm) return false;
 
       // Availability filter
       if (availabilityFilter !== 'ALL') {
@@ -244,7 +281,7 @@ export const MedMap: React.FC<MedMapProps> = ({
     });
 
   return (
-    <div className="w-full rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm bg-white">
+    <div className="w-full rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm bg-white relative isolate z-0">
       {showFilters && (
         <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex flex-col space-y-3 text-xs">
           {/* Top Row: Type & GPS Button */}
@@ -348,7 +385,7 @@ export const MedMap: React.FC<MedMapProps> = ({
       )}
 
       {/* Main Map Container */}
-      <div style={{ height }} className="relative">
+      <div style={{ height, minHeight: '320px' }} className="relative isolate z-0 w-full overflow-hidden">
         <MapContainer
           center={[userCoords.lat, userCoords.lon]}
           zoom={zoom}
@@ -358,6 +395,13 @@ export const MedMap: React.FC<MedMapProps> = ({
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          {/* Automatic smooth pan and bounds fitting */}
+          <MapController
+            center={[userCoords.lat, userCoords.lon]}
+            radiusKm={radiusKm}
+            filteredSources={filteredSources}
           />
 
           {/* Search Radius Circle Overlay */}

@@ -489,3 +489,85 @@
   overflow-y: auto;
   animation: scaleUp 0.18s ease;
 }
+
+/* =========================================================
+   OPTICAL MEDICINE SCANNER LASER
+   ========================================================= */
+@keyframes laserSweep {
+  0% {
+    top: 2%;
+    opacity: 0.9;
+  }
+  50% {
+    top: 96%;
+    opacity: 1;
+  }
+  100% {
+    top: 2%;
+    opacity: 0.9;
+  }
+}
+
+.laser-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #38bdf8, #22d3ee, #38bdf8, transparent);
+  box-shadow: 0 0 16px #38bdf8, 0 0 28px #06b6d4;
+  animation: laserSweep 2s ease-in-out infinite;
+  z-index: 20;
+}
+
+/* =========================================================
+   LEAFLET MAP ISOLATION & RESPONSIVE SCROLL FIXES
+   Prevents Leaflet controls/popups from escaping stacking context
+   or overlapping/hiding underneath the sticky Navbar.
+   ========================================================= */
+.leaflet-container {
+  font-family: inherit !important;
+  z-index: 0 !important;
+  width: 100% !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 400 !important;
+}
+
+.leaflet-control {
+  z-index: 400 !important;
+}
+
+.leaflet-pane {
+  z-index: 100 !important;
+}
+
+.leaflet-tile-pane {
+  z-index: 50 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 150 !important;
+}
+
+.leaflet-marker-pane {
+  z-index: 250 !important;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 300 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 350 !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+

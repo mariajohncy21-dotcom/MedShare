@@ -13,6 +13,7 @@ import {
   ReservationStatus,
   AuditLogItem,
   DirectPharmacyRequest,
+  PharmacyEmergencyRequest,
   StockChangeLog,
 } from '../types';
 import {
@@ -23,12 +24,14 @@ import {
   INITIAL_RESERVATIONS,
   INITIAL_EMERGENCY_REQUESTS,
   INITIAL_DIRECT_REQUESTS,
+  INITIAL_PHARMACY_REQUESTS,
   INITIAL_TRANSFERS,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
   getExpiryStatus,
 } from '../data/mockData';
 import { api } from '../services/api';
+import { calculateDistanceKm } from '../services/smartAllocation';
 
 interface AppContextType {
   currentUser: User;
@@ -44,6 +47,7 @@ interface AppContextType {
   reservations: Reservation[];
   emergencyRequests: EmergencyRequest[];
   directRequests: DirectPharmacyRequest[];
+  pharmacyRequests: PharmacyEmergencyRequest[];
   transfers: StockTransfer[];
   auditLogs: AuditLogItem[];
   stockChangeLogs: StockChangeLog[];
@@ -65,6 +69,12 @@ interface AppContextType {
     acceptedQuantity?: number,
     rejectionReason?: string
   ) => void;
+
+  // Pharmacy Module Actions (Requirements #1 - #9)
+  updatePharmacyAvailability: (sourceId: string, status: 'ACTIVE_ONLINE' | 'BUSY' | 'OFFLINE' | 'CLOSED') => void;
+  acceptPharmacyEmergencyRequest: (requestId: string, pharmacyId: string, contributedQuantity: number) => { reservationId: string };
+  declinePharmacyEmergencyRequest: (requestId: string, pharmacyId: string, reason?: string) => void;
+  completePharmacyDispense: (reservationId: string) => void;
 
   // Inventory Management
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'updatedAt' | 'expiryStatus' | 'stockStatus' | 'latitude' | 'longitude'>) => void;
@@ -138,8 +148,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       if (liveSources.status === 'fulfilled' && Array.isArray(liveSources.value) && liveSources.value.length > 0) {
-        setSources(liveSources.value);
-        localStorage.setItem('medshare_sources_v2', JSON.stringify(liveSources.value));
+        const uniqueSources = Array.from(new Map(liveSources.value.map((s) => [s.id, s])).values());
+        setSources(uniqueSources);
+        localStorage.setItem('medshare_sources_v2', JSON.stringify(uniqueSources));
       }
 
       if (liveInventory.status === 'fulfilled' && Array.isArray(liveInventory.value) && liveInventory.value.length > 0) {
@@ -205,6 +216,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_DIRECT_REQUESTS;
   });
 
+  const [pharmacyRequests, setPharmacyRequests] = useState<PharmacyEmergencyRequest[]>(() => {
+    const saved = localStorage.getItem('medshare_pharmacy_requests_v2');
+    return saved ? JSON.parse(saved) : INITIAL_PHARMACY_REQUESTS;
+  });
+
   const [transfers, setTransfers] = useState<StockTransfer[]>(() => {
     const saved = localStorage.getItem('medshare_transfers_v2');
     return saved ? JSON.parse(saved) : INITIAL_TRANSFERS;
@@ -249,6 +265,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('medshare_direct_requests_v2', JSON.stringify(directRequests));
   }, [directRequests]);
+
+  useEffect(() => {
+    localStorage.setItem('medshare_pharmacy_requests_v2', JSON.stringify(pharmacyRequests));
+  }, [pharmacyRequests]);
 
   useEffect(() => {
     localStorage.setItem('medshare_transfers_v2', JSON.stringify(transfers));
@@ -301,22 +321,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchMongoData();
   }, []);
 
-  // Periodic check for expired reservations
+  // Periodic check for expired reservations & automatic stock release (Requirement #6 & #9)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date().getTime();
-      setReservations((prev) =>
-        prev.map((res) => {
+      const expiredResIds: string[] = [];
+
+      setReservations((prev) => {
+        let changed = false;
+        const updated = prev.map((res) => {
           if (res.status === 'PENDING' || res.status === 'CONFIRMED') {
             const exp = new Date(res.expiresAt).getTime();
             if (now > exp) {
-              return { ...res, status: 'EXPIRED' };
+              changed = true;
+              expiredResIds.push(res.id);
+              return { ...res, status: 'EXPIRED' as ReservationStatus };
             }
           }
           return res;
-        })
-      );
-    }, 15000);
+        });
+        return changed ? updated : prev;
+      });
+
+      if (expiredResIds.length > 0) {
+        // Automatically release linked pharmacy requests
+        setPharmacyRequests((prev) =>
+          prev.map((pr) =>
+            pr.reservationId && expiredResIds.includes(pr.reservationId) && (pr.status === 'ACCEPTED' || pr.status === 'RESERVED')
+              ? { ...pr, status: 'EXPIRED' }
+              : pr
+          )
+        );
+
+        // Automatically release reserved inventory back to available stock
+        setInventory((prev) =>
+          prev.map((inv) => {
+            if (inv.reservedQuantity && inv.reservedQuantity > 0) {
+              return { ...inv, reservedQuantity: 0 };
+            }
+            return inv;
+          })
+        );
+      }
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -535,6 +582,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Emergency broadcast for ${newEmergency.quantity} units of ${newEmergency.medicineName} (${newEmergency.urgency}).`
     );
 
+    // Broadcast to verified, active, open pharmacies stocking the medicine (Requirements #4 & #9)
+    const activeVerifiedPharmacies = sources.filter((s) => {
+      const isVerifiedPharm = s.type === 'PHARMACY' && s.verificationStatus === 'APPROVED' && s.accountStatus === 'ACTIVE';
+      const isOpen = s.availabilityStatus !== 'CLOSED' && s.availabilityStatus !== 'OFFLINE';
+      return isVerifiedPharm && isOpen;
+    });
+
+    const newPharmacyItems: PharmacyEmergencyRequest[] = activeVerifiedPharmacies.map((p) => {
+      const stock = inventory.find(
+        (i) => i.sourceId === p.id && (i.medicineId === req.medicineId || i.medicineName.toLowerCase() === req.medicineName.toLowerCase())
+      );
+      const availStock = stock ? Math.max(0, stock.quantity - (stock.reservedQuantity || 0)) : 0;
+      const dist = calculateDistanceKm(req.latitude || 8.4184, req.longitude || 77.8732, p.latitude, p.longitude);
+
+      return {
+        id: `EMR-PH-${Math.floor(1000 + Math.random() * 9000)}`,
+        emergencyRequestId: emrId,
+        pharmacyId: p.id,
+        pharmacyName: p.name,
+        medicineId: req.medicineId,
+        medicineName: req.medicineName,
+        requiredQuantity: req.quantity,
+        pharmacyAvailableStock: availStock,
+        urgency: req.urgency === 'CRITICAL' ? 'CRITICAL' : 'URGENT',
+        distanceKm: dist,
+        createdAt: new Date().toISOString(),
+        status: 'PENDING',
+        requesterName: req.patientName,
+        requesterPhone: req.patientPhone,
+        requesterType: 'PATIENT',
+        notes: req.additionalNotes || 'Urgent citizen emergency request broadcast',
+      };
+    });
+
+    if (newPharmacyItems.length > 0) {
+      setPharmacyRequests((prev) => [...newPharmacyItems, ...prev]);
+    }
+
     const notif: NotificationItem = {
       id: `NOTIF-${Date.now()}`,
       title: `🚨 EMERGENCY BROADCAST: ${emrId}`,
@@ -649,6 +734,212 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return req;
       })
+    );
+  };
+
+  // =========================================================================
+  // PHARMACY MODULE ACTIONS (Requirements #1 - #9)
+  // =========================================================================
+
+  const updatePharmacyAvailability = (
+    sourceId: string,
+    status: 'ACTIVE_ONLINE' | 'BUSY' | 'OFFLINE' | 'CLOSED'
+  ) => {
+    setSources((prev) =>
+      prev.map((s) => (s.id === sourceId ? { ...s, availabilityStatus: status } : s))
+    );
+
+    const source = sources.find((s) => s.id === sourceId);
+    addAuditLog(
+      'ORGANIZATION_UPDATED',
+      source?.name || 'Pharmacy Dispensary',
+      'PHARMACY',
+      `Dispensary network availability updated to: ${status.replace('_', ' ')}`
+    );
+  };
+
+  const acceptPharmacyEmergencyRequest = (
+    requestId: string,
+    pharmacyId: string,
+    contributedQuantity: number
+  ): { reservationId: string } => {
+    const req = pharmacyRequests.find((r) => r.id === requestId);
+    const pharmacy = sources.find((s) => s.id === pharmacyId);
+    const resId = `MS-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes hold
+
+    // 1. Mark pharmacy request as RESERVED
+    setPharmacyRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: 'RESERVED',
+              contributedQuantity,
+              reservationId: resId,
+              reservationExpiresAt: expiresAt.toISOString(),
+            }
+          : r
+      )
+    );
+
+    // 2. Put temporary hold on inventory (reservedQuantity)
+    if (req) {
+      setInventory((prev) =>
+        prev.map((inv) => {
+          if (
+            inv.sourceId === pharmacyId &&
+            (inv.medicineId === req.medicineId || inv.medicineName.toLowerCase().includes(req.medicineName.toLowerCase()))
+          ) {
+            return {
+              ...inv,
+              reservedQuantity: (inv.reservedQuantity || 0) + contributedQuantity,
+            };
+          }
+          return inv;
+        })
+      );
+
+      // 3. Create formal Reservation with 15-min countdown
+      const newReservation: Reservation = {
+        id: resId,
+        userId: currentUser.id,
+        userName: req.requesterName || 'Emergency Patient',
+        userPhone: req.requesterPhone || '+91 98765 43210',
+        medicineId: req.medicineId,
+        medicineName: req.medicineName,
+        totalQuantity: contributedQuantity,
+        urgency: req.urgency === 'NORMAL' ? 'NORMAL' : 'CRITICAL',
+        status: 'CONFIRMED',
+        createdAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        qrToken: `MS-RES-${resId}-${Math.floor(10000 + Math.random() * 90000)}`,
+        allocationBreakdown: [
+          {
+            sourceId: pharmacyId,
+            sourceName: pharmacy?.name || req.pharmacyName,
+            quantity: contributedQuantity,
+            address: pharmacy?.address || 'Tisaiyanvilai',
+            phone: pharmacy?.phone || '+91 4637 271240',
+            sourceStatus: 'CONFIRMED',
+          },
+        ],
+      };
+
+      setReservations((prev) => [newReservation, ...prev]);
+
+      addAuditLog(
+        'RESERVATION_CREATED',
+        pharmacy?.name || 'Pharmacy Dispensary',
+        'PHARMACY',
+        `Pharmacy approved contribution: ${contributedQuantity} units of ${req.medicineName} held under Reservation ${resId} (15 mins window).`
+      );
+
+      const notif: NotificationItem = {
+        id: `NOTIF-${Date.now()}`,
+        title: `✅ Emergency Medicine Reserved: ${resId}`,
+        message: `${pharmacy?.name || 'Pharmacy'} reserved ${contributedQuantity} units of ${req.medicineName}. Valid for 15 minutes.`,
+        type: 'RESERVATION',
+        timestamp: 'Just now',
+        read: false,
+        link: '/reservations',
+        targetRole: 'ALL',
+      };
+      setNotifications((prev) => [notif, ...prev]);
+    }
+
+    return { reservationId: resId };
+  };
+
+  const declinePharmacyEmergencyRequest = (
+    requestId: string,
+    pharmacyId: string,
+    reason?: string
+  ) => {
+    setPharmacyRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: 'DECLINED',
+              declinedReason: reason || 'Stock reserved for critical walk-in patients',
+            }
+          : r
+      )
+    );
+
+    const req = pharmacyRequests.find((r) => r.id === requestId);
+    if (req) {
+      addAuditLog(
+        'DIRECT_REQUEST_REJECTED',
+        req.pharmacyName,
+        'PHARMACY',
+        `Declined emergency request for ${req.medicineName}: ${reason || 'Capacity limit'}`
+      );
+    }
+  };
+
+  const completePharmacyDispense = (reservationId: string) => {
+    const res = reservations.find((r) => r.id === reservationId);
+    if (!res) return;
+
+    // 1. Mark reservation as COLLECTED
+    setReservations((prev) =>
+      prev.map((r) => (r.id === reservationId ? { ...r, status: 'COLLECTED' as ReservationStatus } : r))
+    );
+
+    // 2. Mark any linked pharmacy requests as COMPLETED
+    setPharmacyRequests((prev) =>
+      prev.map((pr) =>
+        pr.reservationId === reservationId ? { ...pr, status: 'COMPLETED' } : pr
+      )
+    );
+
+    // 3. Permanently deduct stock from inventory
+    res.allocationBreakdown.forEach((alloc) => {
+      setInventory((prev) =>
+        prev.map((inv) => {
+          if (inv.sourceId === alloc.sourceId && (inv.medicineId === res.medicineId || inv.medicineName.toLowerCase() === res.medicineName.toLowerCase())) {
+            const prevQty = inv.quantity;
+            const newQty = Math.max(0, inv.quantity - alloc.quantity);
+            const newReserved = Math.max(0, (inv.reservedQuantity || 0) - alloc.quantity);
+
+            // Record stock change log
+            const logId = `STK-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+            const newLog: StockChangeLog = {
+              id: logId,
+              inventoryId: inv.id,
+              medicineName: inv.medicineName,
+              sourceId: inv.sourceId,
+              sourceName: inv.sourceName,
+              previousQuantity: prevQty,
+              newQuantity: newQty,
+              updatedBy: currentUser.name || 'Dispensary Pharmacist',
+              updatedAt: new Date().toISOString(),
+              reason: `Emergency medicine collected by patient (${reservationId} - ${alloc.quantity} units)`,
+            };
+            setStockChangeLogs((lPrev) => [newLog, ...lPrev]);
+
+            return {
+              ...inv,
+              quantity: newQty,
+              reservedQuantity: newReserved,
+              stockStatus: newQty <= 0 ? 'CRITICAL' : newQty <= 15 ? 'LOW' : 'GOOD',
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return inv;
+        })
+      );
+    });
+
+    // 4. Audit Log
+    addAuditLog(
+      'INVENTORY_UPDATED',
+      res.allocationBreakdown[0]?.sourceName || 'Pharmacy Dispensary',
+      'PHARMACY',
+      `Medicine dispensed and collected: ${res.totalQuantity} units of ${res.medicineName} (Reservation ${reservationId}). Stock permanently deducted.`
     );
   };
 
@@ -1083,6 +1374,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setReservations(INITIAL_RESERVATIONS);
     setEmergencyRequests(INITIAL_EMERGENCY_REQUESTS);
     setDirectRequests(INITIAL_DIRECT_REQUESTS);
+    setPharmacyRequests(INITIAL_PHARMACY_REQUESTS);
     setTransfers(INITIAL_TRANSFERS);
     setAuditLogs(INITIAL_AUDIT_LOGS);
     setStockChangeLogs([]);
@@ -1108,6 +1400,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reservations,
         emergencyRequests,
         directRequests,
+        pharmacyRequests,
         transfers,
         auditLogs,
         stockChangeLogs,
@@ -1120,6 +1413,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateEmergencyStatus,
         sendDirectHospitalRequest,
         respondToDirectHospitalRequest,
+        updatePharmacyAvailability,
+        acceptPharmacyEmergencyRequest,
+        declinePharmacyEmergencyRequest,
+        completePharmacyDispense,
         addInventoryItem,
         updateInventoryQuantity,
         deleteInventoryItem,

@@ -53,18 +53,28 @@ export class SmartAllocationService {
     const userLat = input.userLat ?? 8.4184; // Tisaiyanvilai 627657
     const userLon = input.userLon ?? 77.8732;
 
-    // 1. Filter inventories for the target medicine with stock > 0
-    const relevantInventory = input.inventories.filter(
-      (inv) => inv.medicineId === input.medicineId && inv.quantity > 0 && inv.expiryStatus !== 'EXPIRED'
-    );
+    // 1. Filter inventories for the target medicine with stock > 0 and not expired
+    const todayStr = new Date().toISOString().split('T')[0];
+    const relevantInventory = input.inventories.filter((inv) => {
+      const isTargetMed = inv.medicineId === input.medicineId;
+      const unexpired = inv.expiryStatus !== 'EXPIRED' && inv.expiryDate >= todayStr;
+      const unreservedStock = inv.quantity - (inv.reservedQuantity || 0);
+      return isTargetMed && unreservedStock > 0 && unexpired;
+    });
 
     if (relevantInventory.length === 0) {
       return { recommendedPlan: null, alternativePlans: [], candidateSources: [] };
     }
 
-    // 2. Map inventory with source information & distance
+    // 2. Map inventory with source information & distance (only verified, active, open sources)
     const sourceMap = new Map<string, MedicalSource>();
-    input.sources.forEach((s) => sourceMap.set(s.id, s));
+    input.sources.forEach((s) => {
+      const isApproved = s.verificationStatus === 'APPROVED' && s.accountStatus === 'ACTIVE' && !s.isDeleted;
+      const isOpen = s.availabilityStatus !== 'CLOSED' && s.availabilityStatus !== 'OFFLINE';
+      if (isApproved && isOpen) {
+        sourceMap.set(s.id, s);
+      }
+    });
 
     const candidates = relevantInventory
       .map((inv) => {
@@ -94,7 +104,8 @@ export class SmartAllocationService {
 
     for (const c of candidates) {
       if (remainingQuantity <= 0) break;
-      const allocQty = Math.min(c.inventory.quantity, remainingQuantity);
+      const availableStock = c.inventory.quantity - (c.inventory.reservedQuantity || 0);
+      const allocQty = Math.min(availableStock, remainingQuantity);
       if (allocQty > 0) {
         smartAllocations.push({
           sourceId: c.source.id,
@@ -141,12 +152,15 @@ export class SmartAllocationService {
     };
 
     // 4. Plan B: Single Source (Further away) if available
-    const singleFullSources = candidates.filter((c) => c.inventory.quantity >= input.requiredQuantity);
+    const singleFullSources = candidates.filter(
+      (c) => (c.inventory.quantity - (c.inventory.reservedQuantity || 0)) >= input.requiredQuantity
+    );
     const alternativePlans: AllocationPlan[] = [];
 
     if (singleFullSources.length > 0) {
       // Pick the best single source that has 100% quantity
       const single = singleFullSources[0];
+      const singleAvail = single.inventory.quantity - (single.inventory.reservedQuantity || 0);
       const singleMinutes = estimateCollectionMinutes(single.distanceKm, 1, input.urgency);
       
       // Only show as alternative if it's different or farther than the recommended plan's primary source
@@ -168,7 +182,7 @@ export class SmartAllocationService {
               sourceName: single.source.name,
               sourceType: single.source.type,
               allocatedQuantity: input.requiredQuantity,
-              availableQuantity: single.inventory.quantity,
+              availableQuantity: singleAvail,
               distanceKm: single.distanceKm,
               estimatedMinutes: singleMinutes,
               address: single.source.address,
@@ -196,7 +210,8 @@ export class SmartAllocationService {
         if (hospRemaining <= 0) break;
         // Avoid duplicate
         if (hospAllocations.some(a => a.sourceId === c.source.id)) continue;
-        const alloc = Math.min(c.inventory.quantity, hospRemaining);
+        const avail = c.inventory.quantity - (c.inventory.reservedQuantity || 0);
+        const alloc = Math.min(avail, hospRemaining);
         if (alloc > 0) {
           hospAllocations.push({
             sourceId: c.source.id,

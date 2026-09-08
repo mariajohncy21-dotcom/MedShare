@@ -328,6 +328,7 @@ export const RegisterPage: React.FC = () => {
     organizationName: '', authorizedPerson: '', email: '', contactNumber: '',
     password: '', confirmPassword: '',
     registrationNumber: '', hospitalType: 'Multi-Speciality Hospital',
+    openingTime: '08:00 AM', closingTime: '10:00 PM',
     doorNumber: '', street: '', area: 'Main Bazaar',
     city: DEFAULT_CITY, district: DEFAULT_DISTRICT, state: DEFAULT_STATE,
     pincode: DEFAULT_PINCODE, latitude: DEFAULT_LAT, longitude: DEFAULT_LON,
@@ -413,9 +414,13 @@ export const RegisterPage: React.FC = () => {
       const res = await register({
         role: selectedRole!, name: facilityData.organizationName,
         organizationName: facilityData.organizationName, authorizedPerson: facilityData.authorizedPerson,
+        ownerName: facilityData.authorizedPerson,
         email: facilityData.email, phone: facilityData.contactNumber, password: facilityData.password,
         registrationNumber: facilityData.registrationNumber,
         hospitalType: selectedRole === 'HOSPITAL' ? facilityData.hospitalType : undefined,
+        openingTime: facilityData.openingTime,
+        closingTime: facilityData.closingTime,
+        operatingHours: `${facilityData.openingTime} - ${facilityData.closingTime}`,
         address: fullAddress, doorNumber: facilityData.doorNumber, street: facilityData.street,
         area: facilityData.area, city: facilityData.city, district: facilityData.district,
         state: facilityData.state, pincode: facilityData.pincode,
@@ -838,9 +843,14 @@ export const RegisterPage: React.FC = () => {
                 onChange={e => setFacilityData({ ...facilityData, city: e.target.value })} />
             </FieldWrapper>
 
-            <FieldWrapper label="Pincode">
-              <StyledInput type="text" required value={facilityData.pincode}
-                onChange={e => setFacilityData({ ...facilityData, pincode: e.target.value })} />
+            <FieldWrapper label="Opening Time">
+              <StyledInput type="text" required placeholder="e.g. 08:00 AM" value={facilityData.openingTime}
+                onChange={e => setFacilityData({ ...facilityData, openingTime: e.target.value })} />
+            </FieldWrapper>
+
+            <FieldWrapper label="Closing Time">
+              <StyledInput type="text" required placeholder="e.g. 10:00 PM" value={facilityData.closingTime}
+                onChange={e => setFacilityData({ ...facilityData, closingTime: e.target.value })} />
             </FieldWrapper>
 
             <div style={{ gridColumn: '1 / -1' }}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { SmartAllocationService, calculateDistanceKm } from '../services/smartAllocation';
 import { AllocationPlan, UrgencyLevel, MedicalSource, ImageCatalogMatch, Medicine } from '../types';
@@ -31,9 +31,12 @@ import {
   PackageCheck,
   Activity,
   Zap,
+  LayoutGrid,
 } from 'lucide-react';
 import { MedMap } from '../components/map/MedMap';
 import { RouteModal } from '../components/map/RouteModal';
+import { MedicineCard } from '../components/common/MedicineCard';
+import { MedicineImageScanner } from '../components/common/MedicineImageScanner';
 import { TISAIYANVILAI_LOCALITIES, DEMO_IMAGE_CATALOG, DEFAULT_CITY, DEFAULT_PINCODE } from '../data/mockData';
 import confetti from 'canvas-confetti';
 
@@ -51,9 +54,10 @@ const CATEGORIES = [
 export const FindMedicine: React.FC = () => {
   const { medicines, sources, inventory, createReservation } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Search Mode: 'NAME' or 'IMAGE'
-  const [searchMode, setSearchMode] = useState<'NAME' | 'IMAGE'>('NAME');
+  // Search Mode: 'NAME', 'IMAGE', or 'CATALOG'
+  const [searchMode, setSearchMode] = useState<'NAME' | 'IMAGE' | 'CATALOG'>('NAME');
 
   // Search Inputs
   const [selectedMedicineId, setSelectedMedicineId] = useState<string>('MED-01'); // Default Paracetamol 500mg
@@ -187,7 +191,12 @@ export const FindMedicine: React.FC = () => {
     }
 
     const activeSources = sources.filter(
-      (s) => !s.isDeleted && s.accountStatus === 'ACTIVE' && s.verificationStatus === 'APPROVED'
+      (s) =>
+        !s.isDeleted &&
+        s.accountStatus === 'ACTIVE' &&
+        s.verificationStatus === 'APPROVED' &&
+        s.availabilityStatus !== 'CLOSED' &&
+        s.availabilityStatus !== 'OFFLINE'
     );
 
     setTimeout(() => {
@@ -213,6 +222,17 @@ export const FindMedicine: React.FC = () => {
   useEffect(() => {
     runSmartAllocation();
   }, [selectedMedicineId, quantity, urgency, inventory, userCoordinates, sources, searchRadiusKm]);
+
+  useEffect(() => {
+    const medParam = searchParams.get('med');
+    if (medParam) {
+      const found = medicines.find((m) => m.id === medParam);
+      if (found) {
+        setSelectedMedicineId(found.id);
+        setSearchQuery(found.name);
+      }
+    }
+  }, [searchParams, medicines]);
 
   const handleSearchClick = (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,7 +322,7 @@ export const FindMedicine: React.FC = () => {
       <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-slate-200/90 space-y-6">
         {/* Toggle Mode: Name Search vs Image Search */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
+          <div className="flex flex-wrap rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold gap-1">
             <button
               type="button"
               onClick={() => setSearchMode('NAME')}
@@ -321,7 +341,17 @@ export const FindMedicine: React.FC = () => {
               }`}
             >
               <Camera className="w-4 h-4" />
-              <span>📷 Search by Image (Prototype)</span>
+              <span>📷 Optical Medicine & Prescription Scanner</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode('CATALOG')}
+              className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                searchMode === 'CATALOG' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>🗂️ 4-Column Medicine Catalog</span>
             </button>
           </div>
 
@@ -502,85 +532,61 @@ export const FindMedicine: React.FC = () => {
           </form>
         )}
 
-        {/* MODE B: IMAGE SEARCH */}
+        {/* MODE B: IMAGE SEARCH WITH AI VISION & IMMEDIATE PHARMACY AVAILABILITY */}
         {searchMode === 'IMAGE' && (
-          <div className="space-y-4">
-            <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex items-start gap-3">
-              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-900">
-                <strong className="font-bold">Catalog Package Recognition Prototype:</strong> Upload or select an image of a medicine strip, vial, or ampoule to match it against MedShare catalog records.
+          <div className="pt-2">
+            <MedicineImageScanner
+              userLat={userCoordinates.lat}
+              userLon={userCoordinates.lon}
+              userLocationName={userLocationName}
+              onMedicineMatched={(med) => {
+                setSelectedMedicineId(med.id);
+                setSearchQuery(med.name);
+              }}
+            />
+          </div>
+        )}
+
+        {/* MODE C: 4-CARDS-PER-ROW RECTANGULAR CATALOG */}
+        {searchMode === 'CATALOG' && (
+          <div className="space-y-6 pt-2">
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <strong className="text-xs font-black text-blue-900">
+                  Visual Medicine Formulary Grid:
+                </strong>
+                <p className="text-[11px] text-blue-700 mt-0.5">
+                  Browsing all 18 emergency & essential medicines in clean rectangular cards with live pharmacy stock.
+                </p>
               </div>
+              <span className="text-xs font-bold text-blue-800 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs w-fit">
+                4 Cards / Row Layout
+              </span>
             </div>
 
-            {/* Select Demo Packaging Strip */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                Click Sample Medicine Packaging or Upload Your Own:
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {DEMO_IMAGE_CATALOG.map((item) => (
-                  <button
-                    key={item.medicineId}
-                    type="button"
-                    onClick={() => handleImageMatch(item)}
-                    className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                      selectedMedicineId === item.medicineId
-                        ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30'
-                        : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-full h-14 rounded-xl overflow-hidden bg-slate-200 mb-2">
-                      <img
-                        src={medicines.find((m) => m.id === item.medicineId)?.sampleImageUrl}
-                        alt={item.medicineName}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <p className="font-extrabold text-slate-900 text-xs truncate">{item.medicineName}</p>
-                    <p className="text-[10px] text-teal-700 font-bold">{item.confidence}% match</p>
-                  </button>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {filteredCatalog.map((med) => (
+                <MedicineCard
+                  key={med.id}
+                  medicine={med}
+                  inventory={inventory}
+                  sources={sources}
+                  userLat={userCoordinates.lat}
+                  userLon={userCoordinates.lon}
+                  onSelectMedicine={(selected) => {
+                    handleSelectMedicine(selected);
+                    setSearchMode('NAME');
+                  }}
+                  onOpenReserve={(selectedMed) => {
+                    handleSelectMedicine(selectedMed);
+                    setSearchMode('NAME');
+                  }}
+                  onOpenDirections={(source) => {
+                    setRouteSource(source);
+                  }}
+                />
+              ))}
             </div>
-
-            {/* File Upload Input */}
-            <div className="flex items-center gap-3">
-              <label className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload Medicine Box Photo</span>
-                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-              </label>
-              {isMatchingImage && (
-                <span className="text-xs text-blue-600 font-bold flex items-center gap-1.5 animate-pulse">
-                  <Sparkles className="w-3.5 h-3.5" /> Analyzing packaging against catalog...
-                </span>
-              )}
-            </div>
-
-            {/* Matched Result Card */}
-            {matchedImageResult && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <strong className="text-xs font-bold text-emerald-900">
-                      Catalog Match Verified: {matchedImageResult.medicineName}
-                    </strong>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">
-                      {matchedImageResult.confidence}% Confidence
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-emerald-700 mt-1">{matchedImageResult.packagingMatched}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('NAME')}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 transition-colors cursor-pointer"
-                >
-                  Confirm & Search Stock
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -680,43 +686,44 @@ export const FindMedicine: React.FC = () => {
           </div>
         </div>
 
-        {/* RESULTS GRID: Requirements 12, 13, 14 */}
+        {/* RESULTS GRID: Requirements 12, 13, 14 (4 CARDS PER ROW) */}
         {nearbySourceResults.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {nearbySourceResults.map(({ source, inventory: inv, distance }) => (
               <div
                 key={source.id}
-                className="bg-white rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group"
+                className="bg-white rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group hover:-translate-y-0.5"
               >
-                {/* Facility Image Header Banner */}
-                <div className="w-full h-32 relative bg-slate-100 overflow-hidden flex-shrink-0">
+                {/* Facility Image Header Banner - RECTANGULAR 16:10 */}
+                <div className="w-full aspect-[16/10] relative bg-slate-100 overflow-hidden flex-shrink-0">
                   <img
-                    src={source.imageUrl || source.logoUrl || 'https://images.unsplash.com/photo-1586015555751-63c237841c7b?w=800&auto=format&fit=crop&q=80'}
+                    src={source.imageUrl || source.logoUrl || 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80'}
                     alt={source.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
+                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
                     <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md backdrop-blur-md ${
-                        source.type === 'HOSPITAL' ? 'bg-indigo-600/90 text-white' : 'bg-teal-600/90 text-white'
+                      className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-lg backdrop-blur-md text-white ${
+                        source.type === 'HOSPITAL' ? 'bg-indigo-600/90' : 'bg-teal-600/90'
                       }`}
                     >
                       {source.type}
                     </span>
                     {source.isVerified && (
-                      <span className="bg-blue-600/90 text-white text-[9px] font-black px-2 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" /> Verified
+                      <span className="bg-blue-600/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg backdrop-blur-md flex items-center gap-0.5">
+                        <ShieldCheck className="w-2.5 h-2.5" /> Verified
                       </span>
                     )}
                   </div>
                   {source.emergencySupport24x7 && (
-                    <span className="absolute top-3 right-3 bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                    <span className="absolute top-2.5 right-2.5 bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm">
                       24x7
                     </span>
                   )}
                   <div className="absolute bottom-2 left-3 right-3">
-                    <h3 className="font-extrabold text-white text-sm leading-tight drop-shadow-sm truncate">
+                    <h3 className="font-extrabold text-white text-[13px] leading-tight drop-shadow-sm truncate">
                       {source.name}
                     </h3>
                   </div>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { Medicine, MedicalSource } from '../types';
 import {
   HeartPulse,
   Search,
@@ -17,17 +18,50 @@ import {
   Users,
   ChevronRight,
   Zap,
+  Camera,
 } from 'lucide-react';
-import { DEFAULT_CITY, DEFAULT_PINCODE } from '../data/mockData';
+import { DEFAULT_CITY, DEFAULT_PINCODE, DEFAULT_LAT, DEFAULT_LON } from '../data/mockData';
+import { MedicineCard } from '../components/common/MedicineCard';
+import { MedicineImageScanner } from '../components/common/MedicineImageScanner';
+import { RouteModal } from '../components/map/RouteModal';
+import { calculateDistanceKm } from '../services/smartAllocation';
 
 export const Home: React.FC = () => {
   const { medicines, sources, inventory, reservations } = useApp();
   const navigate = useNavigate();
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchFilter, setSearchFilter] = useState<string>('');
+  const [directionsSource, setDirectionsSource] = useState<{
+    source: MedicalSource;
+    medicine: Medicine;
+    availableQty: number;
+  } | null>(null);
+
+  const categories = [
+    { id: 'ALL', label: 'All Medicines' },
+    { id: 'ANALGESIC_ANTIPYRETIC', label: 'Pain & Fever' },
+    { id: 'ANTIBIOTIC', label: 'Antibiotics' },
+    { id: 'EMERGENCY_CARDIAC', label: 'Cardiac Care' },
+    { id: 'ANTIVIRAL', label: 'Antiviral' },
+    { id: 'DIABETIC_CRITICAL', label: 'Diabetic Care' },
+    { id: 'RESPIRATORY_EMERGENCY', label: 'Respiratory' },
+    { id: 'ANTICOAGULANT', label: 'Anticoagulant' },
+  ];
+
+  const filteredMedicines = medicines.filter((m) => {
+    const matchesCat = selectedCategory === 'ALL' || m.category === selectedCategory;
+    const matchesSearch =
+      !searchFilter ||
+      m.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      m.genericName.toLowerCase().includes(searchFilter.toLowerCase());
+    return matchesCat && matchesSearch;
+  });
+
   const activeSources = sources.filter((s) => !s.isDeleted && s.isVerified);
   const activePharmacies = activeSources.filter((s) => s.type === 'PHARMACY');
   const activeHospitals = activeSources.filter((s) => s.type === 'HOSPITAL');
-  const activeReservations = reservations.filter((r) => r.status === 'ACTIVE' || r.status === 'PENDING');
+  const activeReservations = reservations.filter((r) => r.status === 'CONFIRMED' || r.status === 'PENDING');
 
   const stats = [
     { label: 'Verified Facilities', value: activeSources.length, color: '#1d4ed8', icon: Building2 },
@@ -163,6 +197,25 @@ export const Home: React.FC = () => {
                   Find Available Medicine
                   <ArrowRight style={{ width: 14, height: 14 }} />
                 </Link>
+
+                <a
+                  href="#scanner-section"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '13px 26px',
+                    borderRadius: 10,
+                    background: 'rgba(56,189,248,0.15)',
+                    border: '1.5px solid rgba(56,189,248,0.4)',
+                    color: '#7dd3fc',
+                    fontSize: 14, fontWeight: 800,
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Camera style={{ width: 16, height: 16 }} />
+                  📷 Scan Medicine / Prescription
+                </a>
+
                 <Link
                   to="/emergency"
                   style={{
@@ -310,78 +363,137 @@ export const Home: React.FC = () => {
       </section>
 
       {/* ─────────────────────────────────────────────────────────
-          QUICK MEDICINE SEARCH
+          AI MEDICINE IMAGE & PRESCRIPTION SCANNER SECTION
       ───────────────────────────────────────────────────────── */}
-      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 24px 0' }}>
-        <div style={{
-          background: '#fff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 18,
-          padding: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Search style={{ width: 15, height: 15, color: '#1d4ed8' }} />
+      <section id="scanner-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 24px 0' }}>
+        <MedicineImageScanner
+          onMedicineMatched={(med) => {
+            setSelectedCategory(med.category);
+          }}
+          userLocationName={`${DEFAULT_CITY} (${DEFAULT_PINCODE})`}
+        />
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────
+          ESSENTIAL MEDICINES CATALOG (4-CARDS-PER-ROW RECTANGULAR GRID)
+      ───────────────────────────────────────────────────────── */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '48px 24px 0' }}>
+        <div className="space-y-6">
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-600 mb-1">
+                <Sparkles className="w-4 h-4" />
+                <span>State Formulary Catalog</span>
               </div>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: 0 }}>Quick Medicine Catalog</p>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>Live stock in {DEFAULT_CITY}</p>
-              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Essential & Emergency Medicines
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Real-time batch inventories tracked across 15 licensed pharmacies & hospitals in {DEFAULT_CITY} ({DEFAULT_PINCODE})
+              </p>
             </div>
+
             <Link
               to="/search"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                fontSize: 12, fontWeight: 700, color: '#1d4ed8',
-                textDecoration: 'none',
-              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-extrabold border border-blue-200 transition-colors w-fit"
             >
-              Full Search & Image Scanner
-              <ChevronRight style={{ width: 14, height: 14 }} />
+              <span>Advanced Allocation Solver</span>
+              <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }} className="sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
-            {medicines.map((med) => (
-              <Link
+          {/* Filters Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+            {/* Category Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+              <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Filter:</span>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedCategory === cat.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Text Filter */}
+            <div className="relative w-full md:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Filter by medicine name..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {/* RECTANGULAR 4-CARDS-PER-ROW GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredMedicines.map((med) => (
+              <MedicineCard
                 key={med.id}
-                to="/search"
-                style={{
-                  padding: '10px',
-                  borderRadius: 12,
-                  border: '1.5px solid #e2e8f0',
-                  background: '#fafbfc',
-                  textDecoration: 'none',
-                  display: 'block',
-                  transition: 'all 0.12s ease',
+                medicine={med}
+                inventory={inventory}
+                sources={sources}
+                onSelectMedicine={(selected) => {
+                  navigate(`/search?med=${selected.id}`);
                 }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#93c5fd';
-                  (e.currentTarget as HTMLElement).style.background = '#eff6ff';
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                onOpenReserve={(selectedMed, selectedSource) => {
+                  navigate(`/search?med=${selectedMed.id}`);
                 }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#e2e8f0';
-                  (e.currentTarget as HTMLElement).style.background = '#fafbfc';
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                onOpenDirections={(source, med, availableQty) => {
+                  setDirectionsSource({ source, medicine: med, availableQty });
                 }}
-              >
-                <div style={{ width: '100%', height: 52, borderRadius: 8, overflow: 'hidden', background: '#e2e8f0', marginBottom: 8 }}>
-                  <img src={med.sampleImageUrl} alt={med.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <p style={{ fontSize: 11.5, fontWeight: 800, color: '#0f172a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {med.name}
-                </p>
-                <p style={{ fontSize: 10, color: '#94a3b8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {med.dosage}
-                </p>
-              </Link>
+              />
             ))}
           </div>
+
+          {filteredMedicines.length === 0 && (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+              <p className="text-base font-bold text-slate-700">No medicines matched your criteria</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('ALL');
+                  setSearchFilter('');
+                }}
+                className="mt-3 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
+              >
+                Reset Filters
+              </button>
+            </div>
+          )}
         </div>
       </section>
+
+      {/* ROUTE DIRECTIONS MODAL ON HOME */}
+      {directionsSource && (
+        <RouteModal
+          isOpen={!!directionsSource}
+          onClose={() => setDirectionsSource(null)}
+          source={directionsSource.source}
+          userLat={DEFAULT_LAT}
+          userLon={DEFAULT_LON}
+          userLocationName={`${DEFAULT_CITY} Main Bazaar`}
+          distanceKm={calculateDistanceKm(DEFAULT_LAT, DEFAULT_LON, directionsSource.source.latitude, directionsSource.source.longitude)}
+          estimatedMinutes={Math.max(4, Math.round(calculateDistanceKm(DEFAULT_LAT, DEFAULT_LON, directionsSource.source.latitude, directionsSource.source.longitude) * 3.2))}
+          medicineName={directionsSource.medicine.name}
+          availableQuantity={directionsSource.availableQty}
+          onReserveClick={() => {
+            navigate(`/search?med=${directionsSource.medicine.id}`);
+          }}
+        />
+      )}
 
       {/* ─────────────────────────────────────────────────────────
           CAPABILITIES

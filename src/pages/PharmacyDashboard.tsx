@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { InventoryItem, DirectPharmacyRequest } from '../types';
+import { InventoryItem, PharmacyEmergencyRequest, PharmacyRequestStatus } from '../types';
 import {
   Building2,
   Package,
@@ -8,22 +8,28 @@ import {
   Clock,
   CheckCircle2,
   Plus,
-  RefreshCw,
   TrendingUp,
   Search,
-  SlidersHorizontal,
   Edit2,
   ShieldCheck,
   X,
   ArrowRight,
-  Send,
-  Calendar,
   AlertOctagon,
   Check,
   XCircle,
-  HelpCircle,
   FileSpreadsheet,
   Trash2,
+  Phone,
+  MapPin,
+  Calendar,
+  Activity,
+  User,
+  ShieldAlert,
+  HelpCircle,
+  RefreshCw,
+  Sparkles,
+  ChevronRight,
+  Timer,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -34,59 +40,174 @@ export const PharmacyDashboard: React.FC = () => {
     medicines,
     sources,
     reservations,
-    directRequests,
+    pharmacyRequests,
     stockChangeLogs,
-    updateReservationStatus,
     addInventoryItem,
     updateInventoryQuantity,
     deleteInventoryItem,
-    respondToDirectHospitalRequest,
+    updatePharmacyAvailability,
+    acceptPharmacyEmergencyRequest,
+    declinePharmacyEmergencyRequest,
+    completePharmacyDispense,
+    cancelReservation,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'INVENTORY' | 'REQUESTS' | 'RESERVATIONS' | 'EXPIRY_ALERTS' | 'AUDIT'>('OVERVIEW');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Active navigation tab
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'INVENTORY' | 'QUEUE' | 'RESERVATIONS' | 'HISTORY'>('OVERVIEW');
+
+  // Search & Filter States
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'EXPIRED'>('ALL');
+  
+  // History Filter States
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'ALL' | 'COMPLETED' | 'DECLINED' | 'EXPIRED'>('ALL');
+  const [historyDateFilter, setHistoryDateFilter] = useState('');
+
+  // Modals state
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editQuantityValue, setEditQuantityValue] = useState<number>(0);
   const [editReason, setEditReason] = useState<string>('Stock received from distributor');
 
-  // Partial accept modal state for direct hospital request
-  const [partialModalReq, setPartialModalReq] = useState<DirectPharmacyRequest | null>(null);
-  const [partialQuantity, setPartialQuantity] = useState<number>(10);
+  // Contribution modal state for emergency request
+  const [contributionRequest, setContributionRequest] = useState<PharmacyEmergencyRequest | null>(null);
+  const [contributeQuantity, setContributeQuantity] = useState<number>(1);
 
-  // Form states for Add Stock
+  // Decline modal state
+  const [declineModalReq, setDeclineModalReq] = useState<PharmacyEmergencyRequest | null>(null);
+  const [declineReason, setDeclineReason] = useState<string>('Stock reserved for local walk-in critical care patients');
+
+  // Add Stock Form states
   const [newMedId, setNewMedId] = useState(medicines[0]?.id || '');
   const [newBatch, setNewBatch] = useState('BT-CP-994');
   const [newQuantity, setNewQuantity] = useState(50);
   const [newExpiry, setNewExpiry] = useState('2027-08-20');
   const [newPrice, setNewPrice] = useState(25);
 
-  // RBAC verification check
+  // Live timer tick for reservation countdowns (updates every second)
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Pharmacy identity resolution
   const pharmacySourceId = currentUser.sourceId || 'SRC-PHARM-001';
-  const currentPharmacySource = sources.find((s) => s.id === pharmacySourceId);
+  const currentPharmacySource = sources.find((s) => s.id === pharmacySourceId) || {
+    id: pharmacySourceId,
+    name: currentUser.name || 'Apollo Pharmacy – Tisaiyanvilai Main',
+    type: 'PHARMACY' as const,
+    address: 'Main Bazaar Road, Tisaiyanvilai - 627657',
+    phone: '+91 4637 271240',
+    email: currentUser.email || 'apollo@pharm.com',
+    operatingHours: '08:00 AM - 10:00 PM',
+    isVerified: true,
+    verificationStatus: 'APPROVED' as const,
+    accountStatus: 'ACTIVE' as const,
+    availabilityStatus: 'ACTIVE_ONLINE' as const,
+    registrationNumber: 'TN-PHARM-2021-9921',
+  };
 
-  // Check if unapproved or suspended
-  const isApproved = currentPharmacySource?.verificationStatus === 'APPROVED' && currentPharmacySource?.accountStatus === 'ACTIVE';
+  // Verification gating
+  const isVerified = currentPharmacySource.verificationStatus === 'APPROVED' && currentPharmacySource.isVerified;
+  const currentAvailability = currentPharmacySource.availabilityStatus || 'ACTIVE_ONLINE';
 
-  // Pharmacy's own inventory (filtered by sourceId, strictly excluding other orgs)
-  const pharmacyInventory = inventory.filter((i) => i.sourceId === pharmacySourceId);
+  // Pharmacy's isolated inventory
+  const pharmacyInventory = useMemo(() => {
+    return inventory.filter((i) => i.sourceId === pharmacySourceId);
+  }, [inventory, pharmacySourceId]);
 
-  // Incoming hospital emergency requests
-  const incomingRequests = directRequests.filter(
-    (req) => req.pharmacyId === pharmacySourceId || (currentPharmacySource && req.pharmacyName === currentPharmacySource.name)
-  );
+  // Compute status for an inventory line
+  const computeItemStatus = (item: InventoryItem) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (item.expiryDate < today || item.expiryStatus === 'EXPIRED') {
+      return 'EXPIRED';
+    }
+    const avail = item.quantity - (item.reservedQuantity || 0);
+    if (avail <= 0) {
+      return 'OUT_OF_STOCK';
+    }
+    if (avail <= 15) {
+      return 'LOW_STOCK';
+    }
+    return 'AVAILABLE';
+  };
 
-  // Incoming reservations for this pharmacy
-  const incomingReservations = reservations.filter((r) =>
-    r.allocationBreakdown.some((b) => b.sourceId === pharmacySourceId)
-  );
+  // KPI calculations
+  const totalMedicinesCount = pharmacyInventory.length;
+  const availableMedicinesCount = pharmacyInventory.filter((i) => computeItemStatus(i) === 'AVAILABLE').length;
+  const lowStockCount = pharmacyInventory.filter((i) => computeItemStatus(i) === 'LOW_STOCK' || computeItemStatus(i) === 'OUT_OF_STOCK').length;
+  
+  // Requests relevant to this pharmacy
+  const myPharmacyRequests = useMemo(() => {
+    return pharmacyRequests.filter((r) => r.pharmacyId === pharmacySourceId);
+  }, [pharmacyRequests, pharmacySourceId]);
 
-  const lowStockItems = pharmacyInventory.filter((i) => i.stockStatus === 'LOW' || i.stockStatus === 'CRITICAL');
-  const expiringItems = pharmacyInventory.filter((i) => i.expiryStatus === 'EXPIRING_SOON');
+  // Emergency Queue: Priority-Sorted (1. Critical -> 2. Urgent -> 3. Normal)
+  const priorityQueue = useMemo(() => {
+    const priorityWeight: Record<string, number> = {
+      CRITICAL: 1,
+      URGENT: 2,
+      NORMAL: 3,
+    };
 
-  // Stock logs for this pharmacy
-  const pharmacyLogs = stockChangeLogs.filter((l) => l.sourceId === pharmacySourceId);
+    return myPharmacyRequests
+      .filter((r) => r.status === 'PENDING' || r.status === 'ACCEPTED' || r.status === 'RESERVED')
+      .sort((a, b) => {
+        const weightA = priorityWeight[a.urgency] || 4;
+        const weightB = priorityWeight[b.urgency] || 4;
+        if (weightA !== weightB) return weightA - weightB;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [myPharmacyRequests]);
 
+  const activeEmergencyRequestsCount = priorityQueue.filter((r) => r.status === 'PENDING').length;
+
+  // Active reservations (holds) for this pharmacy
+  const activeReservations = useMemo(() => {
+    return reservations.filter(
+      (r) =>
+        r.allocationBreakdown.some((b) => b.sourceId === pharmacySourceId) &&
+        (r.status === 'CONFIRMED' || r.status === 'PENDING')
+    );
+  }, [reservations, pharmacySourceId]);
+
+  const activeReservationsCount = activeReservations.length;
+
+  // Request History: Completed, Declined, Expired
+  const requestHistory = useMemo(() => {
+    return myPharmacyRequests
+      .filter((r) => r.status === 'COMPLETED' || r.status === 'DECLINED' || r.status === 'EXPIRED')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [myPharmacyRequests]);
+
+  // Filtered inventory list
+  const filteredInventory = useMemo(() => {
+    return pharmacyInventory.filter((item) => {
+      const matchesSearch =
+        item.medicineName.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        item.batchNumber.toLowerCase().includes(inventorySearch.toLowerCase());
+      const status = computeItemStatus(item);
+      const matchesStatus = inventoryStatusFilter === 'ALL' || status === inventoryStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [pharmacyInventory, inventorySearch, inventoryStatusFilter]);
+
+  // Filtered history list
+  const filteredHistory = useMemo(() => {
+    return requestHistory.filter((item) => {
+      const matchesSearch =
+        item.medicineName.toLowerCase().includes(historySearch.toLowerCase()) ||
+        item.id.toLowerCase().includes(historySearch.toLowerCase()) ||
+        (item.reservationId && item.reservationId.toLowerCase().includes(historySearch.toLowerCase()));
+      const matchesStatus = historyStatusFilter === 'ALL' || item.status === historyStatusFilter;
+      const matchesDate = !historyDateFilter || item.createdAt.startsWith(historyDateFilter);
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [requestHistory, historySearch, historyStatusFilter, historyDateFilter]);
+
+  // Add stock submission
   const handleAddStockSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const med = medicines.find((m) => m.id === newMedId);
@@ -96,7 +217,7 @@ export const PharmacyDashboard: React.FC = () => {
       medicineId: newMedId,
       medicineName: med.name,
       sourceId: pharmacySourceId,
-      sourceName: currentPharmacySource?.name || currentUser.name || 'CarePoint 24/7 Pharmacy',
+      sourceName: currentPharmacySource?.name || currentUser.name || 'Dispensary',
       sourceType: 'PHARMACY',
       quantity: Math.max(0, newQuantity),
       batchNumber: newBatch,
@@ -109,199 +230,379 @@ export const PharmacyDashboard: React.FC = () => {
     setIsAddStockOpen(false);
   };
 
+  // Quantity edit submission
   const handleSaveQuantityEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
-
     updateInventoryQuantity(editingItem.id, Math.max(0, editQuantityValue), editReason);
     setEditingItem(null);
   };
 
-  const handlePartialSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!partialModalReq) return;
-
-    respondToDirectHospitalRequest(
-      partialModalReq.id,
-      'PARTIALLY_ACCEPTED',
-      partialQuantity,
-      `Accepted available stock (${partialQuantity} units). Remainder auto-directed to secondary network facilities.`
+  // Open contribution modal for accepting emergency request
+  const openContributionModal = (req: PharmacyEmergencyRequest) => {
+    setContributionRequest(req);
+    // Find current available stock in pharmacy
+    const stockItem = pharmacyInventory.find(
+      (i) => i.medicineId === req.medicineId || i.medicineName.toLowerCase() === req.medicineName.toLowerCase()
     );
-    setPartialModalReq(null);
+    const available = stockItem ? Math.max(0, stockItem.quantity - (stockItem.reservedQuantity || 0)) : req.pharmacyAvailableStock;
+    // Default contribution: min of required quantity and available stock, or half
+    const defaultContribution = Math.min(req.requiredQuantity, Math.max(1, available));
+    setContributeQuantity(defaultContribution);
   };
 
-  const filteredInventory = pharmacyInventory.filter((item) =>
-    item.medicineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Confirm Contribution
+  const handleConfirmContribution = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contributionRequest) return;
+    acceptPharmacyEmergencyRequest(contributionRequest.id, pharmacySourceId, contributeQuantity);
+    setContributionRequest(null);
+  };
+
+  // Decline request submission
+  const handleConfirmDecline = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!declineModalReq) return;
+    declinePharmacyEmergencyRequest(declineModalReq.id, pharmacySourceId, declineReason);
+    setDeclineModalReq(null);
+  };
+
+  // Format seconds into MM:SS
+  const formatTimeRemaining = (expiresAt: string) => {
+    const diff = new Date(expiresAt).getTime() - currentTime;
+    if (diff <= 0) return '00:00 (Expired)';
+    const totalSeconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0fdfa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Building2 style={{ width: 18, height: 18, color: '#0d9488' }} />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      {/* 1. TOP HEADER & PHARMACY NETWORK STATUS BAR */}
+      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-teal-600" />
             </div>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              <ShieldCheck style={{ width: 11, height: 11 }} />
-              Verified Dispensary
+            {isVerified ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                Verified Dispensary
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wider">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                Pending Verification
+              </span>
+            )}
+            <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Lic: {currentPharmacySource.registrationNumber || 'TN-PHARM-2021-9921'}
             </span>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            {currentPharmacySource?.name || currentUser.name}
+
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            {currentPharmacySource.name}
           </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Inventory management · Hospital dispatches · Reservation verification</p>
+          <p className="text-xs sm:text-sm text-slate-500 flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              {currentPharmacySource.address}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              Hours: {currentPharmacySource.operatingHours}
+            </span>
+          </p>
         </div>
-        <button
-          onClick={() => setIsAddStockOpen(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9, background: '#1d4ed8', color: '#fff', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(29,78,216,0.25)', whiteSpace: 'nowrap' }}
-        >
-          <Plus style={{ width: 15, height: 15 }} />
-          Add Medicine Stock
-        </button>
+
+        {/* NETWORK AVAILABILITY STATUS CONTROLLER (Requirement #2) */}
+        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-blue-600" />
+              Dispensary Network Status
+            </span>
+            <span
+              className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                currentAvailability === 'ACTIVE_ONLINE'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : currentAvailability === 'BUSY'
+                  ? 'bg-amber-100 text-amber-800'
+                  : currentAvailability === 'OFFLINE'
+                  ? 'bg-slate-200 text-slate-700'
+                  : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {currentAvailability === 'ACTIVE_ONLINE' && '🟢 Active / Online'}
+              {currentAvailability === 'BUSY' && '🟡 Busy'}
+              {currentAvailability === 'OFFLINE' && '⚪ Offline'}
+              {currentAvailability === 'CLOSED' && '🔴 Closed'}
+            </span>
+          </div>
+
+          {/* Quick status selector buttons */}
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
+            {[
+              { status: 'ACTIVE_ONLINE', label: 'Online', color: 'hover:bg-emerald-50 text-emerald-700' },
+              { status: 'BUSY', label: 'Busy', color: 'hover:bg-amber-50 text-amber-700' },
+              { status: 'OFFLINE', label: 'Offline', color: 'hover:bg-slate-100 text-slate-600' },
+              { status: 'CLOSED', label: 'Closed', color: 'hover:bg-red-50 text-red-700' },
+            ].map(({ status, label, color }) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => updatePharmacyAvailability(pharmacySourceId, status as any)}
+                className={`text-[11px] font-bold py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${color} ${
+                  currentAvailability === status
+                    ? 'bg-white shadow-xs border-slate-300 font-black'
+                    : 'border-transparent bg-transparent opacity-70'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Verification Status Warning if pending / suspended */}
-      {!isApproved && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12 }}>
-          <AlertTriangle style={{ width: 16, height: 16, color: '#d97706', flexShrink: 0, marginTop: 2 }} />
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 800, color: '#92400e', margin: '0 0 2px' }}>Verification Status: {currentPharmacySource?.verificationStatus || 'PENDING'}</p>
-            <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>Your account is undergoing regulatory verification. Public search distribution is inactive until approval.</p>
+      {/* VERIFICATION GATING WARNING BANNER (Requirement #1 & #9) */}
+      {!isVerified && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-amber-900">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="space-y-0.5 text-xs">
+            <p className="font-extrabold text-amber-900">
+              Account Status: {currentPharmacySource.verificationStatus || 'PENDING_VERIFICATION'}
+            </p>
+            <p className="text-amber-700 leading-relaxed">
+              Your pharmacy registration is undergoing regulatory license review by the Drug Control Authority.
+              <strong> Only verified pharmacies can receive and accept emergency medicine requests.</strong> You can
+              manage your inventory below while approval is processed.
+            </p>
           </div>
         </div>
       )}
 
-      {/* KPI Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }} className="lg:grid-cols-4">
+      {/* 2. SUMMARY KPI STATS CARDS (Requirement #2) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Tracked Batches', value: pharmacyInventory.length, sub: 'Active catalog lines', icon: Package, color: '#1d4ed8', bg: '#eff6ff' },
-          { label: 'Hospital Requests', value: incomingRequests.length, sub: 'ICU stock dispatches', icon: AlertOctagon, color: '#dc2626', bg: '#fef2f2' },
-          { label: 'Active Holds', value: incomingReservations.length, sub: '15-minute countdowns', icon: Clock, color: '#0d9488', bg: '#f0fdfa' },
-          { label: 'Low Stock Alerts', value: lowStockItems.length, sub: 'Reorder recommended', icon: AlertTriangle, color: '#d97706', bg: '#fffbeb' },
-        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
-          <div key={label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon style={{ width: 14, height: 14, color }} />
+          {
+            label: 'Total Medicines',
+            value: totalMedicinesCount,
+            sub: 'Catalog items',
+            icon: Package,
+            color: 'text-blue-600',
+            bg: 'bg-blue-50 border-blue-200',
+          },
+          {
+            label: 'Available Medicines',
+            value: availableMedicinesCount,
+            sub: 'In stock & unexpired',
+            icon: CheckCircle2,
+            color: 'text-emerald-600',
+            bg: 'bg-emerald-50 border-emerald-200',
+          },
+          {
+            label: 'Low Stock Medicines',
+            value: lowStockCount,
+            sub: 'Restock recommended',
+            icon: AlertTriangle,
+            color: 'text-amber-600',
+            bg: 'bg-amber-50 border-amber-200',
+          },
+          {
+            label: 'Active Emergency Requests',
+            value: activeEmergencyRequestsCount,
+            sub: 'Live priority queue',
+            icon: AlertOctagon,
+            color: 'text-red-600',
+            bg: 'bg-red-50 border-red-200',
+            badge: activeEmergencyRequestsCount > 0 ? 'Urgent' : undefined,
+          },
+          {
+            label: 'Active Reservations',
+            value: activeReservationsCount,
+            sub: '15-min countdown holds',
+            icon: Clock,
+            color: 'text-teal-600',
+            bg: 'bg-teal-50 border-teal-200',
+          },
+        ].map(({ label, value, sub, icon: Icon, color, bg, badge }) => (
+          <div
+            key={label}
+            className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+              <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${bg}`}>
+                <Icon className={`w-4 h-4 ${color}`} />
               </div>
             </div>
-            <p style={{ fontSize: 28, fontWeight: 900, color, margin: '0 0 3px', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>{value}</p>
-            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, fontWeight: 500 }}>{sub}</p>
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-black ${color}`}>{value}</span>
+                {badge && (
+                  <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                    {badge}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">{sub}</p>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Tabs Navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, overflowX: 'auto' }}>
+      {/* 3. TABS NAVIGATION BAR */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-200/60 rounded-2xl overflow-x-auto">
         {[
-          { key: 'OVERVIEW', label: 'Overview' },
-          { key: 'INVENTORY', label: `Inventory (${pharmacyInventory.length})` },
-          { key: 'REQUESTS', label: `Hospital Requests (${incomingRequests.length})` },
-          { key: 'RESERVATIONS', label: `Reservations (${incomingReservations.length})` },
-          { key: 'EXPIRY_ALERTS', label: `Expiry Alerts (${expiringItems.length})` },
-          { key: 'AUDIT', label: 'Audit Log' },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 8,
-              fontSize: 12.5,
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.12s ease',
-              ...(activeTab === tab.key
-                ? { background: '#fff', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }
-                : { background: 'transparent', color: '#64748b' }),
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { key: 'OVERVIEW', label: 'Overview', icon: Activity },
+          { key: 'INVENTORY', label: `Medicine Inventory (${pharmacyInventory.length})`, icon: Package },
+          {
+            key: 'QUEUE',
+            label: `Emergency Requests (${priorityQueue.length})`,
+            icon: AlertOctagon,
+            badge: activeEmergencyRequestsCount > 0 ? activeEmergencyRequestsCount : undefined,
+          },
+          {
+            key: 'RESERVATIONS',
+            label: `Active Reservations (${activeReservationsCount})`,
+            icon: Clock,
+          },
+          { key: 'HISTORY', label: `Request History (${requestHistory.length})`, icon: Calendar },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black animate-pulse">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* TAB 1: OVERVIEW */}
+      {/* ========================================================================= */}
+      {/* TAB 1: OVERVIEW DASHBOARD */}
+      {/* ========================================================================= */}
       {activeTab === 'OVERVIEW' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Urgent Hospital Requests Panel */}
+          {/* Priority Emergency Requests Feed */}
           <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <AlertOctagon className="w-5 h-5 text-red-600 animate-pulse" />
-                <h3 className="font-extrabold text-slate-900 text-sm">Emergency Hospital Requests</h3>
+                <h2 className="text-base font-extrabold text-slate-900">Priority Emergency Medicine Requests</h2>
               </div>
-              <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-                Action Required
-              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('QUEUE')}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Queue</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {incomingRequests.length > 0 ? (
+            {priorityQueue.length > 0 ? (
               <div className="space-y-3">
-                {incomingRequests.map((req) => (
-                  <div key={req.id} className="p-4 rounded-2xl bg-red-50/60 border border-red-200 space-y-3">
-                    <div className="flex items-start justify-between">
+                {priorityQueue.slice(0, 3).map((req) => (
+                  <div
+                    key={req.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      req.urgency === 'CRITICAL'
+                        ? 'bg-red-50/70 border-red-200'
+                        : req.urgency === 'URGENT'
+                        ? 'bg-amber-50/70 border-amber-200'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <strong className="text-xs font-black text-slate-900">{req.hospitalName}</strong>
-                          <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+                              req.urgency === 'CRITICAL'
+                                ? 'bg-red-600 text-white animate-pulse'
+                                : req.urgency === 'URGENT'
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-700 text-white'
+                            }`}
+                          >
                             {req.urgency}
                           </span>
+                          <span className="text-xs font-mono font-bold text-slate-500">{req.id}</span>
+                          <span className="text-xs font-semibold text-slate-400">
+                            • {req.distanceKm.toFixed(1)} km away
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-600 mt-0.5">
-                          Requested: <strong className="text-slate-900">{req.requestedQuantity} units</strong> of {req.medicineName}
+
+                        <h3 className="text-sm font-black text-slate-900 mt-1">
+                          {req.medicineName}
+                        </h3>
+                        <p className="text-xs text-slate-600">
+                          Required Quantity: <strong className="text-slate-900">{req.requiredQuantity} units</strong> |
+                          Your Available Stock: <strong className="text-teal-700">{req.pharmacyAvailableStock} units</strong>
                         </p>
-                        <p className="text-[10px] text-slate-500">Required by: {req.requiredBy}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Requested by: {req.requesterName} ({req.requesterType}) • {req.requesterPhone}
+                        </p>
                       </div>
+
                       <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          req.status === 'ACCEPTED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : req.status === 'PARTIALLY_ACCEPTED'
+                        className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full ${
+                          req.status === 'PENDING'
                             ? 'bg-amber-100 text-amber-800'
-                            : req.status === 'REJECTED'
-                            ? 'bg-slate-200 text-slate-700'
-                            : 'bg-red-200 text-red-900'
+                            : req.status === 'RESERVED'
+                            ? 'bg-teal-100 text-teal-800'
+                            : 'bg-emerald-100 text-emerald-800'
                         }`}
                       >
                         {req.status}
                       </span>
                     </div>
 
+                    {/* Quick action buttons if PENDING */}
                     {req.status === 'PENDING' && (
-                      <div className="flex items-center gap-2 pt-2 border-t border-red-200/60">
+                      <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => respondToDirectHospitalRequest(req.id, 'ACCEPTED')}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          disabled={!isVerified}
+                          onClick={() => openContributionModal(req)}
+                          className={`flex-1 py-2 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 text-white shadow-xs cursor-pointer ${
+                            isVerified ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300 cursor-not-allowed'
+                          }`}
                         >
                           <Check className="w-3.5 h-3.5" />
-                          <span>Accept Full ({req.requestedQuantity})</span>
+                          <span>Accept Request (Choose Units)</span>
                         </button>
 
                         <button
                           type="button"
+                          disabled={!isVerified}
                           onClick={() => {
-                            setPartialModalReq(req);
-                            setPartialQuantity(Math.floor(req.requestedQuantity / 2) || 5);
+                            setDeclineModalReq(req);
+                            setDeclineReason('Low stock reserved for local emergency patients');
                           }}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                          className="py-2 px-3 rounded-xl font-bold text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer"
                         >
-                          <span>Partially Accept</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => respondToDirectHospitalRequest(req.id, 'REJECTED', 0, 'Out of stock in current dispensary')}
-                          className="py-1.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
-                        >
-                          Reject
+                          Decline
                         </button>
                       </div>
                     )}
@@ -309,317 +610,757 @@ export const PharmacyDashboard: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-slate-400 py-6 text-center">No pending emergency hospital requests.</p>
+              <div className="text-center py-10 space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto opacity-70" />
+                <p className="text-sm font-bold text-slate-700">All Emergency Requests Cleared</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Your dispensary is live on the MedShare grid. Any nearby citizen emergency requests will appear here instantly.
+                </p>
+              </div>
             )}
           </div>
 
-          {/* Low Stock Telemetry */}
+          {/* Quick Dispensary Stock Telemetry */}
           <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-            <h3 className="font-extrabold text-slate-900 text-sm">Dispensary Stock Alerts</h3>
-            {lowStockItems.length > 0 ? (
-              <div className="space-y-2.5">
-                {lowStockItems.map((item) => (
-                  <div key={item.id} className="p-3 bg-amber-50 rounded-2xl border border-amber-200 flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-base font-extrabold text-slate-900">Stock & Expiry Telemetry</h2>
+              <button
+                type="button"
+                onClick={() => setIsAddStockOpen(true)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Medicine</span>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {pharmacyInventory.slice(0, 5).map((item) => {
+                const status = computeItemStatus(item);
+                const avail = item.quantity - (item.reservedQuantity || 0);
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs"
+                  >
                     <div>
-                      <p className="font-bold text-slate-900">{item.medicineName}</p>
-                      <p className="text-[10px] text-amber-800">Batch: {item.batchNumber} • In Stock: {item.quantity} units</p>
+                      <p className="font-extrabold text-slate-900">{item.medicineName}</p>
+                      <p className="text-[11px] text-slate-500">
+                        Available: <strong className="text-slate-800">{avail} units</strong> • Batch: {item.batchNumber}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingItem(item);
-                        setEditQuantityValue(item.quantity);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-bold hover:bg-amber-700 cursor-pointer"
+
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        status === 'AVAILABLE'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : status === 'LOW_STOCK'
+                          ? 'bg-amber-100 text-amber-800'
+                          : status === 'OUT_OF_STOCK'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-purple-100 text-purple-900'
+                      }`}
                     >
-                      Update
-                    </button>
+                      {status === 'AVAILABLE' && 'Available'}
+                      {status === 'LOW_STOCK' && 'Low Stock'}
+                      {status === 'OUT_OF_STOCK' && 'Out of Stock'}
+                      {status === 'EXPIRED' && 'Expired'}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 py-6 text-center">All inventory lines above threshold.</p>
-            )}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: INVENTORY MANAGEMENT (Requirement #6) */}
+      {/* ========================================================================= */}
+      {/* TAB 2: MEDICINE INVENTORY MANAGEMENT (Requirement #3) */}
+      {/* ========================================================================= */}
       {activeTab === 'INVENTORY' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search medicine or batch..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-              />
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">Medicine Inventory Management</h2>
+              <p className="text-xs text-slate-500">
+                Manage stock batches, expiry dates, and real-time available stock for the MedShare network.
+              </p>
             </div>
+
             <button
+              type="button"
               onClick={() => setIsAddStockOpen(true)}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Stock from Catalog</span>
+              <span>Add Medicine Batch</span>
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Filter and Search Controls */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search medicine name or batch..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {(['ALL', 'AVAILABLE', 'LOW_STOCK', 'OUT_OF_STOCK', 'EXPIRED'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setInventoryStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    inventoryStatusFilter === st
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {st.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Inventory Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Medicine</th>
-                  <th className="py-3 px-4">Dosage</th>
+                  <th className="py-3 px-4">Medicine Name</th>
                   <th className="py-3 px-4">Batch Number</th>
-                  <th className="py-3 px-4">Quantity</th>
+                  <th className="py-3 px-4">Available Qty</th>
+                  <th className="py-3 px-4">Total Qty</th>
                   <th className="py-3 px-4">Expiry Date</th>
-                  <th className="py-3 px-4">Stock Status</th>
-                  <th className="py-3 px-4">Last Updated</th>
+                  <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {filteredInventory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-900">{item.medicineName}</td>
-                    <td className="py-3 px-4 text-slate-500">{item.dosage || 'Standard'}</td>
-                    <td className="py-3 px-4 font-mono">{item.batchNumber}</td>
-                    <td className="py-3 px-4">
-                      <span className="font-extrabold text-slate-900 text-sm">{item.quantity}</span> {item.unit || 'units'}
-                    </td>
-                    <td className="py-3 px-4">{item.expiryDate}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                          item.stockStatus === 'GOOD'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : item.stockStatus === 'LOW'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {item.stockStatus}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-[11px] text-slate-400">
-                      {new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingItem(item);
-                            setEditQuantityValue(item.quantity);
-                          }}
-                          className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
-                          title="Update Stock"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete/archive batch ${item.batchNumber} of ${item.medicineName}?`)) {
-                              deleteInventoryItem(item.id, 'Archived by facility operator');
-                            }
-                          }}
-                          className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
-                          title="Delete / Archive Batch"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                {filteredInventory.length > 0 ? (
+                  filteredInventory.map((item) => {
+                    const status = computeItemStatus(item);
+                    const avail = item.quantity - (item.reservedQuantity || 0);
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-black text-slate-900">
+                          {item.medicineName}
+                          <span className="block text-[11px] font-normal text-slate-400">
+                            MRP ₹{item.unitPrice || 25} • {item.dosage || 'Standard'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-600">
+                          {item.batchNumber}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="text-sm font-black text-teal-700">{avail}</span> units
+                          {item.reservedQuantity && item.reservedQuantity > 0 ? (
+                            <span className="block text-[10px] text-amber-600 font-bold">
+                              ({item.reservedQuantity} reserved on hold)
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800">
+                          {item.quantity} units
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={status === 'EXPIRED' ? 'text-purple-900 font-black' : 'text-slate-600'}>
+                            {item.expiryDate}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
+                              status === 'AVAILABLE'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : status === 'LOW_STOCK'
+                                ? 'bg-amber-100 text-amber-800'
+                                : status === 'OUT_OF_STOCK'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-purple-100 text-purple-900'
+                            }`}
+                          >
+                            {status === 'AVAILABLE' && 'Available'}
+                            {status === 'LOW_STOCK' && 'Low Stock'}
+                            {status === 'OUT_OF_STOCK' && 'Out of Stock'}
+                            {status === 'EXPIRED' && 'Expired'}
+                          </span>
+                          {status === 'EXPIRED' && (
+                            <span className="block text-[10px] text-purple-700 mt-0.5 font-bold">
+                              ⚠️ Excluded from search results
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingItem(item);
+                                setEditQuantityValue(item.quantity);
+                              }}
+                              className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                              title="Update Quantity & Reason"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Delete medicine batch ${item.batchNumber} (${item.medicineName})?`)) {
+                                  deleteInventoryItem(item.id, 'Deleted by pharmacy operator');
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+                              title="Delete / Archive Medicine"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                      No medicines match the selected filter.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* TAB 3: HOSPITAL REQUESTS */}
-      {activeTab === 'REQUESTS' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 text-sm">Emergency Hospital Requests Telemetry</h3>
-          <div className="space-y-3">
-            {incomingRequests.length > 0 ? (
-              incomingRequests.map((req) => (
-                <div key={req.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm">{req.hospitalName}</h4>
-                      <span className="font-mono text-xs font-bold text-slate-400">{req.id}</span>
+      {/* ========================================================================= */}
+      {/* TAB 3: EMERGENCY REQUESTS QUEUE (Requirements #4, #5, #7) */}
+      {/* ========================================================================= */}
+      {activeTab === 'QUEUE' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">Emergency Medicine Request Queue</h2>
+              <p className="text-xs text-slate-500">
+                Sorted strictly by clinical urgency: <strong>1. Critical</strong> → <strong>2. Urgent</strong> → <strong>3. Normal</strong>.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">
+              Total Active: <strong>{priorityQueue.length}</strong>
+            </span>
+          </div>
+
+          {priorityQueue.length > 0 ? (
+            <div className="space-y-4">
+              {priorityQueue.map((req) => (
+                <div
+                  key={req.id}
+                  className={`p-5 rounded-3xl border transition-all ${
+                    req.urgency === 'CRITICAL'
+                      ? 'bg-red-50/60 border-red-300 shadow-xs'
+                      : req.urgency === 'URGENT'
+                      ? 'bg-amber-50/60 border-amber-300'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`text-xs font-black px-2.5 py-0.5 rounded-full uppercase ${
+                            req.urgency === 'CRITICAL'
+                              ? 'bg-red-600 text-white animate-pulse'
+                              : req.urgency === 'URGENT'
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-slate-700 text-white'
+                          }`}
+                        >
+                          {req.urgency} Priority
+                        </span>
+                        <span className="text-xs font-mono font-black text-slate-600">
+                          ID: {req.id}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-400">
+                          • {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-black text-slate-900">
+                        {req.medicineName}
+                      </h3>
+
+                      <div className="text-xs text-slate-600 flex flex-wrap gap-4 pt-1">
+                        <span>
+                          Patient Required: <strong className="text-slate-900">{req.requiredQuantity} units</strong>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Your Available Stock: <strong className="text-teal-700">{req.pharmacyAvailableStock} units</strong>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Distance: <strong>{req.distanceKm.toFixed(1)} km</strong>
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500">
+                        Requester: <strong>{req.requesterName}</strong> ({req.requesterPhone}) • {req.requesterType}
+                      </p>
+                      {req.notes && <p className="text-[11px] text-slate-500 italic">"{req.notes}"</p>}
                     </div>
-                    <span
-                      className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                        req.status === 'ACCEPTED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : req.status === 'PARTIALLY_ACCEPTED'
-                          ? 'bg-amber-100 text-amber-800'
-                          : req.status === 'REJECTED'
-                          ? 'bg-slate-200 text-slate-700'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {req.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p>
-                      Requested Medicine: <strong className="text-slate-900">{req.medicineName}</strong> ({req.requestedQuantity} units)
-                    </p>
-                    <p>Urgency Level: <strong className="text-red-600">{req.urgency}</strong></p>
-                    <p>Required by: {req.requiredBy}</p>
-                    {req.message && <p className="text-slate-500 italic">Note: "{req.message}"</p>}
+
+                    <div className="flex flex-col sm:flex-row items-end md:items-center gap-2">
+                      <span
+                        className={`text-xs font-black px-3 py-1 rounded-full ${
+                          req.status === 'PENDING'
+                            ? 'bg-amber-100 text-amber-800'
+                            : req.status === 'RESERVED'
+                            ? 'bg-teal-100 text-teal-800'
+                            : req.status === 'ACCEPTED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {req.status}
+                      </span>
+                    </div>
                   </div>
 
+                  {/* ACTION CONTROLS (Accept with custom units / Decline) */}
                   {req.status === 'PENDING' && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => respondToDirectHospitalRequest(req.id, 'ACCEPTED')}
-                        className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Accept Full ({req.requestedQuantity})</span>
-                      </button>
+                    <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">
+                        💡 <em>You are not required to give all stock. Choose how many units to contribute.</em>
+                      </p>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPartialModalReq(req);
-                          setPartialQuantity(Math.floor(req.requestedQuantity / 2) || 5);
-                        }}
-                        className="flex-1 py-1.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <span>Partially Accept</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={!isVerified}
+                          onClick={() => {
+                            setDeclineModalReq(req);
+                            setDeclineReason('Low stock reserved for walk-in critical care patients');
+                          }}
+                          className="py-2 px-4 rounded-xl font-bold text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer"
+                        >
+                          Decline Request
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => respondToDirectHospitalRequest(req.id, 'REJECTED', 0, 'Out of stock in current dispensary')}
-                        className="py-1.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
-                      >
-                        Reject
-                      </button>
+                        <button
+                          type="button"
+                          disabled={!isVerified}
+                          onClick={() => openContributionModal(req)}
+                          className={`py-2 px-5 rounded-xl font-black text-xs text-white shadow-md flex items-center gap-1.5 cursor-pointer ${
+                            isVerified ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-400 cursor-not-allowed'
+                          }`}
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Accept & Select Contribution Units</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 space-y-2">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto opacity-70" />
+              <h3 className="text-sm font-bold text-slate-800">No Pending Emergency Requests</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Any incoming emergency broadcasts within your service radius will be automatically queued here.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: TEMPORARY RESERVATIONS & DISPENSING (Requirement #6) */}
+      {/* ========================================================================= */}
+      {activeTab === 'RESERVATIONS' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">Active Medicine Reservations & Holds</h2>
+              <p className="text-xs text-slate-500">
+                15-minute countdown holds. Reserved stock is safely locked to prevent double-allocation and automatically released upon expiry.
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-xl border border-teal-200">
+              Active Holds: {activeReservations.length}
+            </span>
+          </div>
+
+          {activeReservations.length > 0 ? (
+            <div className="space-y-4">
+              {activeReservations.map((res) => {
+                const breakdown = res.allocationBreakdown.find((b) => b.sourceId === pharmacySourceId);
+                const reservedQty = breakdown ? breakdown.quantity : res.totalQuantity;
+                const timeRemaining = formatTimeRemaining(res.expiresAt);
+
+                return (
+                  <div
+                    key={res.id}
+                    className="p-5 bg-teal-50/40 rounded-3xl border border-teal-200 shadow-xs space-y-4"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-black text-teal-800 bg-teal-100 px-2.5 py-1 rounded-lg">
+                            Reservation ID: {res.id}
+                          </span>
+                          <span className="text-xs font-bold text-slate-500">
+                            Held at: {new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-black text-slate-900 mt-1.5">
+                          {reservedQty} units of {res.medicineName}
+                        </h3>
+
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          Patient: <strong className="text-slate-900">{res.userName}</strong> • Phone:{' '}
+                          <strong className="text-slate-900">{res.userPhone}</strong>
+                        </p>
+                      </div>
+
+                      {/* Live 15-Minute Countdown Indicator */}
+                      <div className="bg-white p-3 rounded-2xl border border-teal-200 text-center min-w-[140px]">
+                        <div className="flex items-center justify-center gap-1 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                          <Timer className="w-3.5 h-3.5 text-teal-600 animate-spin" />
+                          <span>Hold Expiry</span>
+                        </div>
+                        <p className="text-lg font-mono font-black text-teal-700 mt-0.5">
+                          {timeRemaining}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Dispense Action Buttons */}
+                    <div className="pt-3 border-t border-teal-200/60 flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs text-teal-800">
+                        Verify Patient's Reservation ID / QR Code upon collection.
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Release hold for ${res.id}? Reserved stock will immediately return to available stock.`)) {
+                              cancelReservation(res.id, 'Hold cancelled by dispensary');
+                            }
+                          }}
+                          className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                        >
+                          Release Hold
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            completePharmacyDispense(res.id);
+                          }}
+                          className="py-2 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Mark as Collected & Completed</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12 space-y-2">
+              <Clock className="w-10 h-10 text-teal-500 mx-auto opacity-70" />
+              <h3 className="text-sm font-bold text-slate-800">No Active Reservation Holds</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                When you accept an emergency request, the reserved units will be held here for 15 minutes awaiting patient collection.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 5: REQUEST HISTORY (Requirement #8) */}
+      {/* ========================================================================= */}
+      {activeTab === 'HISTORY' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-5">
+          <div>
+            <h2 className="text-lg font-black text-slate-900">Pharmacy Request History</h2>
+            <p className="text-xs text-slate-500">
+              Audit archive of Completed Requests, Declined Requests, and Expired Holds with full date and status filters.
+            </p>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search medicine or Request ID..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+              />
+            </div>
+
+            {/* Status filters */}
+            <div className="flex items-center gap-1.5">
+              {(['ALL', 'COMPLETED', 'DECLINED', 'EXPIRED'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setHistoryStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    historyStatusFilter === st
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            {/* Date filter */}
+            <div className="flex items-center gap-1">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <input
+                type="date"
+                value={historyDateFilter}
+                onChange={(e) => setHistoryDateFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700"
+              />
+              {historyDateFilter && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryDateFilter('')}
+                  className="text-slate-400 hover:text-slate-600 text-xs"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* History List */}
+          <div className="space-y-3">
+            {filteredHistory.length > 0 ? (
+              filteredHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-500">{item.id}</span>
+                      {item.reservationId && (
+                        <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                          Hold: {item.reservationId}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-slate-400">
+                        {new Date(item.createdAt).toLocaleDateString()} at{' '}
+                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <p className="font-black text-slate-900 text-sm">
+                      {item.medicineName}
+                    </p>
+
+                    <p className="text-slate-600">
+                      Required: {item.requiredQuantity} units
+                      {item.contributedQuantity ? (
+                        <span> • Contributed: <strong>{item.contributedQuantity} units</strong></span>
+                      ) : null}
+                      <span> • Requester: {item.requesterName} ({item.requesterType})</span>
+                    </p>
+
+                    {item.declinedReason && (
+                      <p className="text-[11px] text-red-700 italic">Decline reason: "{item.declinedReason}"</p>
+                    )}
+                  </div>
+
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-black self-start sm:self-center ${
+                      item.status === 'COMPLETED'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : item.status === 'DECLINED'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-purple-100 text-purple-800'
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                </div>
               ))
             ) : (
-              <p className="text-xs text-slate-400 py-6 text-center">No incoming hospital requests found.</p>
+              <p className="text-center py-8 text-xs text-slate-400">
+                No request history found matching the selected filters.
+              </p>
             )}
           </div>
         </div>
       )}
 
-      {/* TAB 4: RESERVATIONS */}
-      {activeTab === 'RESERVATIONS' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 text-sm">Active Patient Medicine Holds</h3>
-          <div className="space-y-3">
-            {incomingReservations.map((res) => (
-              <div key={res.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    {res.id}
-                  </span>
-                  <p className="font-bold text-slate-900 mt-1">{res.userName} • {res.userPhone}</p>
-                  <p className="text-slate-500">{res.totalQuantity} units of {res.medicineName}</p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                  {res.status}
-                </span>
+      {/* ========================================================================= */}
+      {/* MODAL 1: CONTRIBUTION MODAL (Requirement #5) */}
+      {/* ========================================================================= */}
+      {contributionRequest && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">Select Contribution Quantity</h3>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: EXPIRY ALERTS */}
-      {activeTab === 'EXPIRY_ALERTS' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 text-sm">Near-Expiry Medicine Alert Monitoring</h3>
-          {expiringItems.length > 0 ? (
-            <div className="space-y-3">
-              {expiringItems.map((item) => (
-                <div key={item.id} className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center justify-between text-xs">
-                  <div>
-                    <h4 className="font-bold text-slate-900">{item.medicineName}</h4>
-                    <p className="text-amber-800 text-[11px]">Batch: {item.batchNumber} • Expiry: {item.expiryDate}</p>
-                  </div>
-                  <span className="px-3 py-1 bg-amber-200 text-amber-900 font-bold rounded-xl">
-                    Expiring in &lt; 90 Days
-                  </span>
-                </div>
-              ))}
+              <button
+                type="button"
+                onClick={() => setContributionRequest(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-6 text-center">No medicines near expiry date.</p>
-          )}
-        </div>
-      )}
 
-      {/* TAB 6: INVENTORY AUDIT LOGS (Requirement #5) */}
-      {activeTab === 'AUDIT' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 text-sm">Dispensary Stock Change History</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="py-2.5 px-4">Medicine</th>
-                  <th className="py-2.5 px-4">Previous Qty</th>
-                  <th className="py-2.5 px-4">New Qty</th>
-                  <th className="py-2.5 px-4">Updated By</th>
-                  <th className="py-2.5 px-4">Timestamp</th>
-                  <th className="py-2.5 px-4">Reason</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {pharmacyLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="py-2.5 px-4 font-bold text-slate-900">{log.medicineName}</td>
-                    <td className="py-2.5 px-4">{log.previousQuantity}</td>
-                    <td className="py-2.5 px-4 font-black text-blue-700">{log.newQuantity}</td>
-                    <td className="py-2.5 px-4 text-slate-500">{log.updatedBy}</td>
-                    <td className="py-2.5 px-4 text-[11px] text-slate-400">
-                      {new Date(log.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-2.5 px-4 text-slate-600">{log.reason || 'Manual Update'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 space-y-1">
+              <p className="font-bold">
+                Emergency Request: {contributionRequest.medicineName}
+              </p>
+              <p>
+                Patient Required: <strong>{contributionRequest.requiredQuantity} units</strong> | Your Available Stock:{' '}
+                <strong>{contributionRequest.pharmacyAvailableStock} units</strong>
+              </p>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              You are <strong>not forced</strong> to provide your entire stock. Enter how many units your pharmacy can allocate for this patient:
+            </p>
+
+            <form onSubmit={handleConfirmContribution} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Contribution Input (Units to Reserve)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, contributionRequest.pharmacyAvailableStock)}
+                    required
+                    value={contributeQuantity}
+                    onChange={(e) => setContributeQuantity(parseInt(e.target.value) || 1)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-black text-lg text-slate-900 focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm font-bold text-slate-500">units</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Upon confirmation, a 15-minute hold with a Reservation ID will be generated.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setContributionRequest(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Confirm Contribution</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ADD STOCK MODAL (Requirement #6: Catalog Constrained) */}
+      {/* ========================================================================= */}
+      {/* MODAL 2: DECLINE REQUEST MODAL */}
+      {/* ========================================================================= */}
+      {declineModalReq && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
+            <h3 className="font-extrabold text-slate-900 text-base">Decline Emergency Request</h3>
+            <p className="text-xs text-slate-500">
+              Provide a reason for declining the request for <strong>{declineModalReq.medicineName}</strong>.
+            </p>
+
+            <form onSubmit={handleConfirmDecline} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Decline Reason</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeclineModalReq(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold shadow-md"
+                >
+                  Confirm Decline
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: ADD MEDICINE STOCK */}
+      {/* ========================================================================= */}
       {isAddStockOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-0 animate-scale-up">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-0">
             <div className="p-6 bg-gradient-to-r from-teal-700 to-blue-700 text-white relative">
               <button
+                type="button"
                 onClick={() => setIsAddStockOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10"
+                className="absolute top-4 right-4 p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
-              <h2 className="text-xl font-black">Add Medicine Stock</h2>
+              <h3 className="text-xl font-black">Register Medicine Batch</h3>
               <p className="text-xs text-blue-100/90 mt-1">
-                Only Admin-approved catalog medicines can be registered into live inventory.
+                Add authentic pharmaceutical stock to your live dispensary inventory.
               </p>
             </div>
 
             <form onSubmit={handleAddStockSubmit} className="p-6 space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Approved Catalog Medicine</label>
+                <label className="block font-bold text-slate-700">Medicine</label>
                 <select
                   value={newMedId}
                   onChange={(e) => setNewMedId(e.target.value)}
@@ -646,7 +1387,7 @@ export const PharmacyDashboard: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Quantity Units</label>
+                  <label className="block font-bold text-slate-700">Total Quantity</label>
                   <input
                     type="number"
                     required
@@ -696,7 +1437,7 @@ export const PharmacyDashboard: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Register Stock</span>
+                  <span>Register Batch</span>
                 </button>
               </div>
             </form>
@@ -704,7 +1445,9 @@ export const PharmacyDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* EDIT QUANTITY MODAL (Requirement #6: Tracking previous vs new quantity) */}
+      {/* ========================================================================= */}
+      {/* MODAL 4: UPDATE STOCK QUANTITY (Requirement #3) */}
+      {/* ========================================================================= */}
       {editingItem && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
@@ -751,55 +1494,9 @@ export const PharmacyDashboard: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold shadow-md"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold shadow-md cursor-pointer"
                 >
                   Save Stock Change
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* PARTIAL ACCEPT MODAL (Requirement #21) */}
-      {partialModalReq && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
-            <h3 className="font-extrabold text-slate-900 text-base">Partially Fulfill Hospital Request</h3>
-            <p className="text-xs text-slate-500">
-              Hospital requested <strong>{partialModalReq.requestedQuantity} units</strong> of {partialModalReq.medicineName}.
-            </p>
-
-            <form onSubmit={handlePartialSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Units to Fulfill from this Pharmacy</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={partialModalReq.requestedQuantity - 1}
-                  required
-                  value={partialQuantity}
-                  onChange={(e) => setPartialQuantity(parseInt(e.target.value) || 1)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 font-extrabold text-base text-slate-900"
-                />
-                <p className="text-[11px] text-teal-700 font-semibold mt-1">
-                  Remaining {partialModalReq.requestedQuantity - partialQuantity} units will be automatically allocated to other verified facilities via Smart Allocation.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setPartialModalReq(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold shadow-md"
-                >
-                  Dispatch Partial Stock
                 </button>
               </div>
             </form>

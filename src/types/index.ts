@@ -43,6 +43,9 @@ export interface MedicalSource {
   phone: string;
   email: string;
   operatingHours: string;
+  openingTime?: string;
+  closingTime?: string;
+  availabilityStatus?: 'ACTIVE_ONLINE' | 'BUSY' | 'OFFLINE' | 'CLOSED';
   isVerified: boolean;
   verificationStatus: VerificationStatus;
   accountStatus: AccountStatus;
@@ -84,6 +87,8 @@ export interface InventoryItem {
   sourceName: string;
   sourceType: 'PHARMACY' | 'HOSPITAL';
   quantity: number;
+  totalQuantity?: number;
+  reservedQuantity?: number;
   batchNumber: string;
   expiryDate: string; // YYYY-MM-DD
   unitPrice: number;
@@ -201,6 +206,31 @@ export interface DirectPharmacyRequest {
   createdAt: string;
   updatedAt?: string;
   rejectionReason?: string;
+}
+
+export type PharmacyRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'RESERVED' | 'COMPLETED' | 'EXPIRED';
+
+export interface PharmacyEmergencyRequest {
+  id: string; // e.g. EMR-PH-1024
+  emergencyRequestId?: string;
+  pharmacyId: string;
+  pharmacyName: string;
+  medicineId: string;
+  medicineName: string;
+  requiredQuantity: number;
+  contributedQuantity?: number;
+  pharmacyAvailableStock: number;
+  urgency: 'CRITICAL' | 'URGENT' | 'NORMAL';
+  distanceKm: number;
+  createdAt: string;
+  status: PharmacyRequestStatus;
+  requesterName: string;
+  requesterPhone: string;
+  requesterType: 'PATIENT' | 'HOSPITAL';
+  reservationId?: string;
+  reservationExpiresAt?: string;
+  declinedReason?: string;
+  notes?: string;
 }
 
 export interface StockTransfer {

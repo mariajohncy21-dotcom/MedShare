@@ -331,6 +331,9 @@ const server = http.createServer(async (req, res) => {
           phone: body.phone || body.contactNumber || '',
           email: email,
           operatingHours: body.operatingHours || (role === 'HOSPITAL' ? '24 Hours Emergency' : '08:00 AM - 10:00 PM'),
+          openingTime: body.openingTime || (role === 'HOSPITAL' ? '12:00 AM' : '08:00 AM'),
+          closingTime: body.closingTime || (role === 'HOSPITAL' ? '11:59 PM' : '10:00 PM'),
+          availabilityStatus: 'ACTIVE_ONLINE',
           isVerified: false,
           verificationStatus: 'PENDING',
           accountStatus: 'PENDING_VERIFICATION',
@@ -428,6 +431,17 @@ const server = http.createServer(async (req, res) => {
       };
 
       return sendJson(res, 201, sanitized);
+    }
+
+    // ==========================================
+    // 2.5 MEDICAL SOURCES / FACILITIES
+    // ==========================================
+    if (pathname === '/api/sources' && method === 'GET') {
+      if (isMongoConnected) {
+        const list = await mongoDb.collection('medical_sources').find({ isDeleted: { $ne: true } }).toArray();
+        return sendJson(res, 200, list);
+      }
+      return sendJson(res, 200, memoryDb.sources.filter((s) => !s.isDeleted));
     }
 
     // ==========================================

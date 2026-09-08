@@ -15,6 +15,7 @@ import {
   ChevronDown,
   CalendarCheck,
   Settings,
+  MapPin,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -76,10 +77,11 @@ export const Navbar: React.FC = () => {
 
   const roleColors = getRoleColors();
 
-  // Navigation Links explicitly requested in line: Home, Find Medicine, Emergency
+  // Navigation Links explicitly requested: Home, Find Medicine, Live Map, Emergency
   const primaryLinks = [
     { name: 'Home', href: '/', icon: HeartPulse },
     { name: 'Find Medicine', href: '/search', icon: Search },
+    { name: 'Live Map', href: '/map', icon: MapPin },
     { name: 'Emergency', href: '/emergency', icon: AlertOctagon, isEmergency: true },
   ];
 
@@ -92,8 +94,8 @@ export const Navbar: React.FC = () => {
           borderBottom: '1px solid #e2e8f0',
           position: 'sticky',
           top: 0,
-          zIndex: 50,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          zIndex: 1100,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
         }}
       >
         <div style={{ maxWidth: 1360, margin: '0 auto', padding: '0 20px' }}>
