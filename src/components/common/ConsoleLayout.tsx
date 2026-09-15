@@ -28,33 +28,33 @@ const NAV_ITEMS: Record<UserRole, { label: string; href: string; icon: React.Ele
   PHARMACY: [
     { label: 'Dashboard', href: '/pharmacy/dashboard', icon: LayoutDashboard },
     { label: 'Inventory', href: '/pharmacy/inventory', icon: Package },
-    { label: 'Add Medicine', href: '/pharmacy/add-medicine', icon: Plus },
-    { label: 'Update Stock', href: '/pharmacy/update-stock', icon: RefreshCw },
-    { label: 'Bulk Upload', href: '/pharmacy/bulk-upload', icon: Upload },
-    { label: 'Stock History', href: '/pharmacy/stock-history', icon: FileText },
-    { label: 'Hospital Requests', href: '/pharmacy/hospital-requests', icon: Send, badge: 'REQUESTS' },
-    { label: 'Emergency Requests', href: '/pharmacy/emergency', icon: AlertOctagon },
+    { label: 'Add Medicine', href: '/pharmacy/inventory/add', icon: Plus },
+    { label: 'Update Stock', href: '/pharmacy/inventory/update', icon: RefreshCw },
+    { label: 'Bulk Upload', href: '/pharmacy/inventory/bulk-upload', icon: Upload },
+    { label: 'Stock History', href: '/pharmacy/inventory/history', icon: FileText },
+    { label: 'Emergency Requests', href: '/pharmacy/emergency-requests', icon: AlertOctagon, badge: 'REQUESTS' },
     { label: 'Reservations', href: '/pharmacy/reservations', icon: CalendarCheck },
-    { label: 'Stock Transfers', href: '/pharmacy/transfers', icon: ArrowLeftRight },
+    { label: 'Daily Reports', href: '/pharmacy/daily-reports', icon: ClipboardList },
     { label: 'Notifications', href: '/pharmacy/notifications', icon: Bell },
-    { label: 'Profile', href: '/pharmacy/profile', icon: Building2 },
+    { label: 'Pharmacy Profile', href: '/pharmacy/profile', icon: Building2 },
     { label: 'Settings', href: '/pharmacy/settings', icon: Settings },
   ],
   HOSPITAL: [
     { label: 'Dashboard', href: '/hospital/dashboard', icon: LayoutDashboard },
-    { label: 'Patient Management', href: '/hospital/patients', icon: Stethoscope },
+    { label: 'Patients', href: '/hospital/patients', icon: Stethoscope },
     { label: 'Inventory', href: '/hospital/inventory', icon: Package },
-    { label: 'Add Medicine', href: '/hospital/add-medicine', icon: Plus },
-    { label: 'Bulk Upload', href: '/hospital/bulk-upload', icon: Upload },
-    { label: 'Update Stock', href: '/hospital/update-stock', icon: RefreshCw },
-    { label: 'Request Medicine', href: '/hospital/request-medicine', icon: Send },
-    { label: 'Nearby Pharmacies', href: '/hospital/nearby-pharmacies', icon: Building2 },
-    { label: 'Emergency Requests', href: '/hospital/emergency', icon: AlertOctagon },
-    { label: 'Smart Allocation', href: '/hospital/smart-allocation', icon: Activity },
+    { label: 'Add Medicine', href: '/hospital/inventory/add', icon: Plus },
+    { label: 'Bulk Upload', href: '/hospital/inventory/bulk-upload', icon: Upload },
+    { label: 'Stock History', href: '/hospital/inventory/history', icon: FileText },
+    { label: 'Requests', href: '/hospital/requests', icon: Send },
+    { label: 'Pharmacy Search', href: '/hospital/pharmacy-search', icon: Search },
+    { label: 'Emergency Requests', href: '/hospital/emergency-requests', icon: AlertOctagon, badge: 'EMERGENCY' },
+    { label: 'Smart Allocation', href: '/hospital/allocation', icon: Activity },
     { label: 'Reservations', href: '/hospital/reservations', icon: CalendarCheck },
-    { label: 'Stock Transfers', href: '/hospital/transfers', icon: ArrowLeftRight },
+    { label: 'Transfers', href: '/hospital/transfers', icon: ArrowLeftRight },
+    { label: 'Daily Reports', href: '/hospital/daily-reports', icon: ClipboardList },
     { label: 'Notifications', href: '/hospital/notifications', icon: Bell },
-    { label: 'Profile', href: '/hospital/profile', icon: Hospital },
+    { label: 'Hospital Profile', href: '/hospital/profile', icon: Hospital },
     { label: 'Settings', href: '/hospital/settings', icon: Settings },
   ],
   ADMIN: [
@@ -99,7 +99,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
 
   const handleLogout = () => {
     logout();
-    navigate('/auth/login');
+    navigate('/login', { replace: true });
   };
 
   const isActive = (href: string) =>
@@ -111,12 +111,15 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
       background: '#fff', borderRight: '1px solid #e2e8f0',
     }}>
       {/* Brand */}
-      <div style={{
-        padding: sidebarCollapsed ? '20px 12px' : '20px 20px',
-        borderBottom: '1px solid #f1f5f9',
-        display: 'flex', alignItems: 'center',
-        gap: 12, minHeight: 68,
-      }}>
+      <Link
+        to={`/${role.toLowerCase()}/dashboard`}
+        style={{
+          padding: sidebarCollapsed ? '20px 12px' : '20px 20px',
+          borderBottom: '1px solid #f1f5f9',
+          display: 'flex', alignItems: 'center',
+          gap: 12, minHeight: 68, textDecoration: 'none',
+        }}
+      >
         <div style={{
           width: 36, height: 36, borderRadius: 10, flexShrink: 0,
           background: `linear-gradient(135deg, ${rc.color}, ${rc.accent})`,
@@ -135,7 +138,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             </p>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Nav items */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '12px 8px', scrollbarWidth: 'thin' }}>
@@ -333,7 +336,28 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Facility Name & Verified Badge for Pharmacy & Hospital */}
+            {(role === 'PHARMACY' || role === 'HOSPITAL') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                  {currentUser.name}
+                </span>
+                {currentUser.verificationStatus === 'APPROVED' && (
+                  <span
+                    title="Verified Facility"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99,
+                      background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0',
+                    }}
+                  >
+                    <ShieldCheck style={{ width: 12, height: 12, color: '#059669' }} />
+                    Verified ✓
+                  </span>
+                )}
+              </div>
+            )}
             {/* Role badge */}
             <span style={{
               fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 99,
@@ -345,6 +369,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             <NotificationDropdown />
             <Link
               to={`/${role.toLowerCase()}/profile`}
+              title="View Profile"
               style={{
                 width: 34, height: 34, borderRadius: 9,
                 background: `linear-gradient(135deg, ${rc.color}, ${rc.accent})`,

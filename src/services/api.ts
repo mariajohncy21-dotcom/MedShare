@@ -1,4 +1,4 @@
-import { User, MedicalSource, Medicine, InventoryItem, EmergencyRequest, Reservation, DirectPharmacyRequest, AuditLogItem, NotificationItem } from '../types';
+import { User, MedicalSource, Medicine, InventoryItem, EmergencyRequest, Reservation, DirectPharmacyRequest, AuditLogItem, NotificationItem, HospitalPatient } from '../types';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
@@ -145,22 +145,25 @@ export const api = {
   hospitalPatients: {
     getAll: async (hospitalId?: string) => {
       const q = hospitalId ? `?hospitalId=${encodeURIComponent(hospitalId)}` : '';
-      return request<any[]>(`/hospital/patients${q}`);
+      return request<HospitalPatient[]>(`/hospital-patients${q}`);
     },
-    create: async (patientData: any) => {
-      return request<any>('/hospital/patients', {
+    getById: async (id: string) => {
+      return request<HospitalPatient>(`/hospital-patients/${id}`);
+    },
+    create: async (patient: Partial<HospitalPatient>) => {
+      return request<HospitalPatient>('/hospital-patients', {
         method: 'POST',
-        body: JSON.stringify(patientData),
+        body: JSON.stringify(patient),
       });
     },
-    update: async (id: string, updates: any) => {
-      return request<any>(`/hospital/patients/${id}`, {
+    update: async (id: string, updates: Partial<HospitalPatient>) => {
+      return request<HospitalPatient>(`/hospital-patients/${id}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
       });
     },
     delete: async (id: string) => {
-      return request<{ success: boolean }>(`/hospital/patients/${id}`, {
+      return request<{ success: boolean }>(`/hospital-patients/${id}`, {
         method: 'DELETE',
       });
     },
@@ -296,6 +299,70 @@ export const api = {
       return request<{ reply: string; role: string }>('/ai/chat', {
         method: 'POST',
         body: JSON.stringify({ message, conversationId }),
+      });
+    },
+  },
+
+  // Mobile OTP Verification
+  otp: {
+    sendOtp: async (phone: string, email?: string) => {
+      return request<{ success: boolean; message: string; devOtp?: string }>('/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone, email }),
+      });
+    },
+    verifyOtp: async (phone: string, otp: string) => {
+      return request<{ success: boolean; message: string }>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone, otp }),
+      });
+    },
+  },
+
+  // Daily Operational Reports (11 AM Deadline)
+  dailyReports: {
+    getHospitalReports: async (hospitalId?: string) => {
+      const q = hospitalId ? `?hospitalId=${encodeURIComponent(hospitalId)}` : '';
+      return request<any[]>(`/daily-reports/hospital${q}`);
+    },
+    submitHospitalReport: async (reportData: any) => {
+      return request<any>('/daily-reports/hospital', {
+        method: 'POST',
+        body: JSON.stringify(reportData),
+      });
+    },
+    getPharmacyReports: async (pharmacyId?: string) => {
+      const q = pharmacyId ? `?pharmacyId=${encodeURIComponent(pharmacyId)}` : '';
+      return request<any[]>(`/daily-reports/pharmacy${q}`);
+    },
+    submitPharmacyReport: async (reportData: any) => {
+      return request<any>('/daily-reports/pharmacy', {
+        method: 'POST',
+        body: JSON.stringify(reportData),
+      });
+    },
+    getAdminSummary: async () => {
+      return request<{
+        hospitals: { total: number; submitted: number; pending: number; overdue: number; reports: any[] };
+        pharmacies: { total: number; submitted: number; pending: number; overdue: number; reports: any[] };
+      }>('/daily-reports/admin');
+    },
+  },
+
+  // Patient Recent Medicine Search History
+  searchHistory: {
+    get: async () => {
+      return request<string[]>('/search-history');
+    },
+    add: async (query: string) => {
+      return request<{ success: boolean }>('/search-history', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+      });
+    },
+    clear: async () => {
+      return request<{ success: boolean }>('/search-history', {
+        method: 'DELETE',
       });
     },
   },

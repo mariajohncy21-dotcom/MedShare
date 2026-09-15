@@ -100,6 +100,9 @@ export const FindMedicine: React.FC = () => {
   const [selectedPlanToReserve, setSelectedPlanToReserve] = useState<AllocationPlan | null>(null);
   const [patientName, setPatientName] = useState('Rahul Sharma');
   const [patientPhone, setPatientPhone] = useState('+91 98765 43210');
+  const [prescriptionAcknowledged, setPrescriptionAcknowledged] = useState(false);
+
+  const currentMedicine = medicines.find(m => m.id === selectedMedicineId);
 
   // Filtered medicines for autocomplete
   const filteredCatalog = medicines.filter((m) => {
@@ -278,8 +281,6 @@ export const FindMedicine: React.FC = () => {
 
     navigate('/reservations');
   };
-
-  const currentMedicine = medicines.find((m) => m.id === selectedMedicineId);
 
   // List of nearby verified sources with this medicine for direct cards
   const nearbySourceResults = inventory
@@ -949,7 +950,7 @@ export const FindMedicine: React.FC = () => {
         </div>
       </div>
 
-      {/* 15-MINUTE QR RESERVATION MODAL */}
+      {/* 15-MINUTE QR RESERVATION MODAL WITH PRESCRIPTION CHECKBOX */}
       {isModalOpen && selectedPlanToReserve && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-200">
@@ -969,7 +970,8 @@ export const FindMedicine: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2 text-xs text-blue-900">
+            {/* In-Person Collection Notice */}
+            <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl space-y-1.5 text-xs text-blue-950">
               <div className="flex items-center justify-between font-bold">
                 <span>Medicine:</span>
                 <span className="text-slate-900">{selectedPlanToReserve.medicineName}</span>
@@ -982,7 +984,38 @@ export const FindMedicine: React.FC = () => {
                 <span>Hold Duration:</span>
                 <span className="text-blue-700">15 Minutes from Confirmation</span>
               </div>
+              <p className="text-[11px] text-blue-800 font-semibold pt-1 border-t border-blue-200/60">
+                📌 <strong>Notice:</strong> Medicine must be collected in person from the selected dispensary location. No online delivery or online payment.
+              </p>
             </div>
+
+            {/* Prescription Required Warning & Mandatory Checkbox */}
+            {(currentMedicine?.prescriptionRequired || selectedPlanToReserve.allocatedSources.some(s => s.isVerified)) && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-extrabold text-amber-900">Prescription Required for Collection</span>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      Please bring your valid prescription when collecting the medicine. The pharmacy may refuse dispensing if a valid prescription is required and not provided.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-2.5 pt-2 border-t border-amber-200/70 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={prescriptionAcknowledged}
+                    onChange={(e) => setPrescriptionAcknowledged(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 mt-0.5 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-amber-950">
+                    I understand that a valid prescription may be required at physical collection.
+                  </span>
+                </label>
+              </div>
+            )}
 
             <form onSubmit={handleConfirmReservation} className="space-y-4">
               <div className="space-y-1.5">
@@ -1017,7 +1050,12 @@ export const FindMedicine: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
+                  disabled={currentMedicine?.prescriptionRequired && !prescriptionAcknowledged}
+                  className={`w-1/2 py-3 rounded-2xl font-extrabold text-xs shadow-lg transition-all cursor-pointer ${
+                    (currentMedicine?.prescriptionRequired && !prescriptionAcknowledged)
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25'
+                  }`}
                 >
                   Generate QR Token & Hold
                 </button>

@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { ConsoleLayout } from '../../components/common/ConsoleLayout';
+import { api } from '../../services/api';
 import { MedicalSource } from '../../types';
 import {
   Building2, Hospital, ShieldCheck, Activity, AlertOctagon, Users,
@@ -36,7 +37,7 @@ export const AdminDashboardPage: React.FC = () => {
     approveSource, rejectSource, suspendSource, reactivateSource, softDeleteSource,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'OVERVIEW'|'VERIFICATION'|'ORGANIZATIONS'|'INVENTORY'|'AUDIT'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW'|'VERIFICATION'|'ORGANIZATIONS'|'INVENTORY'|'DAILY_REPORTS'|'AUDIT'>('OVERVIEW');
   const [sourceFilter, setSourceFilter] = useState<'ALL'|'PHARMACY'|'HOSPITAL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQ, setSearchQ] = useState('');
@@ -61,7 +62,22 @@ export const AdminDashboardPage: React.FC = () => {
     return s;
   }, [sources, sourceFilter, statusFilter, searchQ]);
 
-  const TABS = ['OVERVIEW','VERIFICATION','ORGANIZATIONS','INVENTORY','AUDIT'];
+  const [adminReportsSummary, setAdminReportsSummary] = useState<any>(null);
+  const [adminDrLoading, setAdminDrLoading] = useState(false);
+  const [adminDrSubTab, setAdminDrSubTab] = useState<'HOSPITALS'|'PHARMACIES'>('HOSPITALS');
+
+  const fetchAdminReportsSummary = async () => {
+    setAdminDrLoading(true);
+    try {
+      const data = await api.dailyReports.getAdminSummary();
+      setAdminReportsSummary(data);
+    } catch { setAdminReportsSummary(null); }
+    finally { setAdminDrLoading(false); }
+  };
+
+  useEffect(() => { fetchAdminReportsSummary(); }, []);
+
+  const TABS = ['OVERVIEW','VERIFICATION','ORGANIZATIONS','INVENTORY','DAILY_REPORTS','AUDIT'];
 
   return (
     <ConsoleLayout>
@@ -290,39 +306,102 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* INVENTORY Monitor */}
-        {activeTab === 'INVENTORY' && (
-          <div>
-            <div style={{ background:'#fff', borderRadius:14, border:'1px solid #e2e8f0', overflow:'hidden' }}>
-              <div style={{ padding:'14px 18px', borderBottom:'1px solid #f1f5f9', fontWeight:700, fontSize:14 }}>
-                Network-Wide Inventory ({inventory.length} items)
+        {/* DAILY REPORTS MONITOR */}
+        {activeTab === 'DAILY_REPORTS' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            {/* Sub-tab selection */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
+              <div style={{ display:'flex', gap:6, background:'#f1f5f9', padding:4, borderRadius:10 }}>
+                <button
+                  onClick={() => setAdminDrSubTab('HOSPITALS')}
+                  style={{
+                    padding:'7px 16px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+                    background: adminDrSubTab === 'HOSPITALS' ? '#fff' : 'transparent',
+                    color: adminDrSubTab === 'HOSPITALS' ? '#6d28d9' : '#64748b',
+                    boxShadow: adminDrSubTab === 'HOSPITALS' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                  }}
+                >
+                  Hospitals Daily Operational Reports
+                </button>
+                <button
+                  onClick={() => setAdminDrSubTab('PHARMACIES')}
+                  style={{
+                    padding:'7px 16px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700,
+                    background: adminDrSubTab === 'PHARMACIES' ? '#fff' : 'transparent',
+                    color: adminDrSubTab === 'PHARMACIES' ? '#1d4ed8' : '#64748b',
+                    boxShadow: adminDrSubTab === 'PHARMACIES' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                  }}
+                >
+                  Pharmacies Daily Stock Audits
+                </button>
               </div>
-              <div style={{ maxHeight:500, overflowY:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:13 }}>
+
+              <span style={{ fontSize:12, fontWeight:700, color:'#64748b' }}>
+                11:00 AM Deadline Monitoring System
+              </span>
+            </div>
+
+            {/* Metrics cards */}
+            {adminReportsSummary && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:12 }}>
+                {adminDrSubTab === 'HOSPITALS' ? [
+                  { label: 'Total Hospitals', val: adminReportsSummary.hospitals.total, color: '#6d28d9', bg: '#f5f3ff' },
+                  { label: 'Submitted ✓', val: adminReportsSummary.hospitals.submitted, color: '#059669', bg: '#f0fdf4' },
+                  { label: 'Pending Due', val: adminReportsSummary.hospitals.pending, color: '#d97706', bg: '#fffbeb' },
+                  { label: 'Overdue', val: adminReportsSummary.hospitals.overdue, color: '#dc2626', bg: '#fef2f2' },
+                ].map(m => (
+                  <div key={m.label} style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', border: '1px solid #e2e8f0' }}>
+                    <p style={{ fontSize: 20, fontWeight: 800, color: m.color, margin: 0 }}>{m.val}</p>
+                    <p style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0', fontWeight: 600 }}>{m.label}</p>
+                  </div>
+                )) : [
+                  { label: 'Total Pharmacies', val: adminReportsSummary.pharmacies.total, color: '#1d4ed8', bg: '#eff6ff' },
+                  { label: 'Submitted ✓', val: adminReportsSummary.pharmacies.submitted, color: '#059669', bg: '#f0fdf4' },
+                  { label: 'Pending Due', val: adminReportsSummary.pharmacies.pending, color: '#d97706', bg: '#fffbeb' },
+                  { label: 'Overdue', val: adminReportsSummary.pharmacies.overdue, color: '#dc2626', bg: '#fef2f2' },
+                ].map(m => (
+                  <div key={m.label} style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', border: '1px solid #e2e8f0' }}>
+                    <p style={{ fontSize: 20, fontWeight: 800, color: m.color, margin: 0 }}>{m.val}</p>
+                    <p style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0', fontWeight: 600 }}>{m.label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Table */}
+            <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              {adminDrLoading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading daily report monitoring state…</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
-                      {['Medicine','Source','Qty','Expiry','Status'].map(h=>(
-                        <th key={h} style={{ padding:'11px 14px', textAlign:'left' as const, fontWeight:700, color:'#475569', fontSize:11, textTransform:'uppercase' as const }}>{h}</th>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      {['Organization', 'Reporting Date', 'Submitted At', 'Submission Status'].map(h => (
+                        <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {inventory.sort((a,b) => a.quantity-b.quantity).map((i, idx) => (
-                      <tr key={i.id} style={{ borderBottom:'1px solid #f1f5f9', background:idx%2===0?'#fff':'#fafbfc' }}>
-                        <td style={{ padding:'10px 14px', fontWeight:600 }}>{i.medicineName}</td>
-                        <td style={{ padding:'10px 14px', color:'#64748b', fontSize:12 }}>
-                          {sources.find(s=>s.id===i.sourceId)?.name || i.sourceId}
-                        </td>
-                        <td style={{ padding:'10px 14px', fontWeight:800, color:i.quantity===0?'#dc2626':i.quantity<=15?'#d97706':'#059669' }}>{i.quantity}</td>
-                        <td style={{ padding:'10px 14px', color:'#64748b', fontSize:12 }}>{i.expiryDate}</td>
-                        <td style={{ padding:'10px 14px' }}>
-                          <span style={{ fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:99, background:i.stockStatus==='GOOD'?'#f0fdf4':i.stockStatus==='LOW'?'#fffbeb':'#fef2f2', color:i.stockStatus==='GOOD'?'#166534':i.stockStatus==='LOW'?'#92400e':'#dc2626' }}>{i.stockStatus}</span>
+                    {((adminDrSubTab === 'HOSPITALS' ? adminReportsSummary?.hospitals?.reports : adminReportsSummary?.pharmacies?.reports) || []).map((r: any, idx: number) => (
+                      <tr key={r.organizationId} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                        <td style={{ padding: '11px 14px', fontWeight: 700, color: '#0f172a' }}>{r.organizationName}</td>
+                        <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 12 }}>{r.reportDate}</td>
+                        <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 12 }}>{r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '—'}</td>
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 800, padding: '2px 9px', borderRadius: 99,
+                            background: r.status === 'SUBMITTED' ? '#f0fdf4' : r.status === 'OVERDUE' ? '#fef2f2' : '#fffbeb',
+                            color: r.status === 'SUBMITTED' ? '#166534' : r.status === 'OVERDUE' ? '#dc2626' : '#d97706',
+                            border: `1px solid ${r.status === 'SUBMITTED' ? '#bbf7d0' : r.status === 'OVERDUE' ? '#fecaca' : '#fde68a'}`,
+                          }}>
+                            {r.status}
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              )}
             </div>
           </div>
         )}

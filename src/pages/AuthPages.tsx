@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { api } from '../services/api';
 import { UserRole } from '../types';
 import {
   HeartPulse,
@@ -49,29 +50,36 @@ const AuthLayout: React.FC<{ children: React.ReactNode; maxWidth?: number }> = (
 );
 
 // ─── Brand Mark ──────────────────────────────────────────────────────────────
-const BrandMark: React.FC = () => (
-  <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-    <div style={{
-      width: 40, height: 40, borderRadius: 11,
-      background: 'linear-gradient(135deg, #1d4ed8, #0d9488)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', boxShadow: '0 4px 12px rgba(29,78,216,0.3)',
-    }}>
-      <HeartPulse style={{ width: 20, height: 20 }} />
-    </div>
-    <div>
-      <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: 20, letterSpacing: '-0.03em', color: '#0f172a', margin: 0 }}>
-        Med<span style={{ color: '#1d4ed8' }}>Share</span>
-        <span style={{
-          marginLeft: 6, fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 99,
-          background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
-          textTransform: 'uppercase' as const, letterSpacing: '0.08em', verticalAlign: 'middle',
-        }}>Grid</span>
-      </p>
-      <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, margin: 0 }}>Emergency Medicine Network</p>
-    </div>
-  </Link>
-);
+const BrandMark: React.FC = () => {
+  const { currentUser, isAuthenticated } = useApp();
+  const brandTarget = (isAuthenticated && currentUser && currentUser.id !== 'guest')
+    ? (currentUser.role === 'PHARMACY' ? '/pharmacy/dashboard' : currentUser.role === 'HOSPITAL' ? '/hospital/dashboard' : currentUser.role === 'ADMIN' ? '/admin/dashboard' : '/patient/dashboard')
+    : '/login';
+
+  return (
+    <Link to={brandTarget} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 11,
+        background: 'linear-gradient(135deg, #1d4ed8, #0d9488)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', boxShadow: '0 4px 12px rgba(29,78,216,0.3)',
+      }}>
+        <HeartPulse style={{ width: 20, height: 20 }} />
+      </div>
+      <div>
+        <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: 20, letterSpacing: '-0.03em', color: '#0f172a', margin: 0 }}>
+          Med<span style={{ color: '#1d4ed8' }}>Share</span>
+          <span style={{
+            marginLeft: 6, fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 99,
+            background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+            textTransform: 'uppercase' as const, letterSpacing: '0.08em', verticalAlign: 'middle',
+          }}>Grid</span>
+        </p>
+        <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, margin: 0 }}>Emergency Medicine Network</p>
+      </div>
+    </Link>
+  );
+};
 
 // ─── Form field component ─────────────────────────────────────────────────────
 const FieldWrapper: React.FC<{
@@ -204,11 +212,11 @@ export const LoginPage: React.FC = () => {
       setIsLoading(false);
       if (res.success && res.user) {
         switch (res.user.role) {
-          case 'PATIENT': navigate('/patient/dashboard'); break;
-          case 'PHARMACY': navigate('/pharmacy/dashboard'); break;
-          case 'HOSPITAL': navigate('/hospital/dashboard'); break;
-          case 'ADMIN': navigate('/admin/dashboard'); break;
-          default: navigate('/');
+          case 'PATIENT': navigate('/patient/dashboard', { replace: true }); break;
+          case 'PHARMACY': navigate('/pharmacy/dashboard', { replace: true }); break;
+          case 'HOSPITAL': navigate('/hospital/dashboard', { replace: true }); break;
+          case 'ADMIN': navigate('/admin/dashboard', { replace: true }); break;
+          default: navigate('/', { replace: true });
         }
       } else {
         setErrorMessage(res.error || 'Invalid credentials. Please verify your email and password.');
@@ -595,20 +603,96 @@ export const RegisterPage: React.FC = () => {
     );
   }
 
-  // ─── SCREEN 1: User (Patient) Registration ────────────────────────────────
+  // ─── SCREEN 1: User (Patient) Registration with Mobile OTP ─────────────────
   if (selectedRole === 'PATIENT') {
+    const [patientStep, setPatientStep] = useState<1 | 2>(1);
+    const [otpCode, setOtpCode] = useState('');
+    const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+    const [otpMessage, setOtpMessage] = useState<string | null>(null);
+
+    const handlePatientStep1Next = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setErrorMessage(null);
+      if (patientData.password !== patientData.confirmPassword) {
+        setErrorMessage('Passwords do not match. Please re-enter your password.');
+        return;
+      }
+      if (patientData.password.length < 6) {
+        setErrorMessage('Password must be at least 6 characters long.');
+        return;
+      }
+      if (!patientData.phone || patientData.phone.length < 10) {
+        setErrorMessage('Please enter a valid 10-digit mobile number for OTP verification.');
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const res = await api.otp.sendOtp(patientData.phone, patientData.email);
+        setIsLoading(false);
+        if (res.devOtp) setDevOtpHint(res.devOtp);
+        setOtpMessage(res.message);
+        setPatientStep(2);
+      } catch (err: any) {
+        setIsLoading(false);
+        setErrorMessage(err.message || 'Failed to send OTP to your mobile number.');
+      }
+    };
+
+    const handlePatientOtpVerifyAndSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setErrorMessage(null);
+      if (!otpCode || otpCode.length < 6) {
+        setErrorMessage('Please enter the 6-digit verification code sent to your mobile phone.');
+        return;
+      }
+      setIsLoading(true);
+      try {
+        await api.otp.verifyOtp(patientData.phone, otpCode);
+        const res = await register({
+          role: 'PATIENT', name: patientData.name, email: patientData.email,
+          phone: patientData.phone, password: patientData.password,
+          address: patientData.address, city: patientData.city,
+          district: patientData.district, state: patientData.state,
+          pincode: patientData.pincode, latitude: patientData.latitude, longitude: patientData.longitude,
+          mobileVerified: true, accountStatus: 'ACTIVE',
+        });
+        setIsLoading(false);
+        if (res.success) navigate('/patient/dashboard');
+        else setErrorMessage(res.error || 'Registration failed.');
+      } catch (err: any) {
+        setIsLoading(false);
+        setErrorMessage(err.message || 'OTP verification failed. Please try again.');
+      }
+    };
+
+    const handleResendOtp = async () => {
+      setErrorMessage(null);
+      setIsLoading(true);
+      try {
+        const res = await api.otp.sendOtp(patientData.phone, patientData.email);
+        setIsLoading(false);
+        if (res.devOtp) setDevOtpHint(res.devOtp);
+        setOtpMessage('New OTP sent successfully!');
+      } catch (err: any) {
+        setIsLoading(false);
+        setErrorMessage(err.message || 'Failed to resend OTP.');
+      }
+    };
+
     return (
       <AuthLayout maxWidth={560}>
         <div style={{ padding: '24px 32px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>General Public Account</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+              General Public Account • Step {patientStep} of 2
+            </span>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 900, color: '#0f172a', margin: '2px 0 0', letterSpacing: '-0.02em' }}>
-              Register as User
+              {patientStep === 1 ? 'Register as User' : 'Mobile OTP Verification'}
             </h2>
           </div>
           <button
             type="button"
-            onClick={() => setSelectedRole(null)}
+            onClick={() => { if (patientStep === 2) setPatientStep(1); else setSelectedRole(null); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               fontSize: 12, fontWeight: 700, color: '#64748b',
@@ -617,58 +701,119 @@ export const RegisterPage: React.FC = () => {
             }}
           >
             <ArrowLeft style={{ width: 13, height: 13 }} />
-            Change Role
+            {patientStep === 2 ? 'Back to Details' : 'Change Role'}
           </button>
         </div>
 
         <div style={{ padding: '24px 32px' }}>
           {errorMessage && <div style={{ marginBottom: 16 }}><ErrorBanner message={errorMessage} /></div>}
 
-          <form onSubmit={handlePatientSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <FieldWrapper label="Full Name">
-              <StyledInput type="text" required placeholder="e.g. Rahul Sharma" value={patientData.name}
-                onChange={e => setPatientData({ ...patientData, name: e.target.value })} />
-            </FieldWrapper>
+          {patientStep === 1 ? (
+            <form onSubmit={handlePatientStep1Next} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <FieldWrapper label="Full Name">
+                <StyledInput type="text" required placeholder="e.g. Rahul Sharma" value={patientData.name}
+                  onChange={e => setPatientData({ ...patientData, name: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Mobile Number">
-              <StyledInput type="tel" required placeholder="+91 98401 23456" value={patientData.phone}
-                onChange={e => setPatientData({ ...patientData, phone: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Mobile Number">
+                <StyledInput type="tel" required placeholder="+91 98401 23456" value={patientData.phone}
+                  onChange={e => setPatientData({ ...patientData, phone: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Email Address" colSpan>
-              <StyledInput type="email" required placeholder="name@example.com" value={patientData.email}
-                onChange={e => setPatientData({ ...patientData, email: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Email Address" colSpan>
+                <StyledInput type="email" required placeholder="name@example.com" value={patientData.email}
+                  onChange={e => setPatientData({ ...patientData, email: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Password">
-              <StyledInput type="password" required placeholder="Min. 6 characters" value={patientData.password}
-                onChange={e => setPatientData({ ...patientData, password: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Password">
+                <StyledInput type="password" required placeholder="Min. 6 characters" value={patientData.password}
+                  onChange={e => setPatientData({ ...patientData, password: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Confirm Password">
-              <StyledInput type="password" required placeholder="Re-enter password" value={patientData.confirmPassword}
-                onChange={e => setPatientData({ ...patientData, confirmPassword: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Confirm Password">
+                <StyledInput type="password" required placeholder="Re-enter password" value={patientData.confirmPassword}
+                  onChange={e => setPatientData({ ...patientData, confirmPassword: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Street Address" colSpan>
-              <StyledInput type="text" required placeholder="House / Street / Locality" value={patientData.address}
-                onChange={e => setPatientData({ ...patientData, address: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Street Address" colSpan>
+                <StyledInput type="text" required placeholder="House / Street / Locality" value={patientData.address}
+                  onChange={e => setPatientData({ ...patientData, address: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="City">
-              <StyledInput type="text" required value={patientData.city}
-                onChange={e => setPatientData({ ...patientData, city: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="City">
+                <StyledInput type="text" required value={patientData.city}
+                  onChange={e => setPatientData({ ...patientData, city: e.target.value })} />
+              </FieldWrapper>
 
-            <FieldWrapper label="Pincode">
-              <StyledInput type="text" required value={patientData.pincode}
-                onChange={e => setPatientData({ ...patientData, pincode: e.target.value })} />
-            </FieldWrapper>
+              <FieldWrapper label="Pincode">
+                <StyledInput type="text" required value={patientData.pincode}
+                  onChange={e => setPatientData({ ...patientData, pincode: e.target.value })} />
+              </FieldWrapper>
 
-            <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
-              <SubmitBtn label="Create User Account" loadingLabel="Creating Account…" loading={isLoading} />
-            </div>
-          </form>
+              <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                <SubmitBtn label="Continue to Mobile Verification" loadingLabel="Sending OTP…" loading={isLoading} />
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handlePatientOtpVerifyAndSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{
+                background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: '14px 16px',
+                textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 10,
+              }}>
+                <ShieldCheck style={{ width: 20, height: 20, color: '#1d4ed8', flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', margin: '0 0 2px' }}>
+                    Verification Code Sent
+                  </p>
+                  <p style={{ fontSize: 12, color: '#3b82f6', margin: 0 }}>
+                    We sent a 6-digit verification code to <strong>{patientData.phone}</strong>.
+                  </p>
+                  {devOtpHint && (
+                    <div style={{ marginTop: 8, padding: '4px 8px', background: '#dbeafe', borderRadius: 6, display: 'inline-block' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#1e40af' }}>
+                        Demo Mode OTP: <code style={{ fontSize: 13, fontFamily: 'monospace' }}>{devOtpHint}</code>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {otpMessage && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#059669', background: '#ecfdf5', padding: '8px 12px', borderRadius: 8 }}>
+                  {otpMessage}
+                </div>
+              )}
+
+              <FieldWrapper label="Enter 6-Digit OTP Code">
+                <StyledInput
+                  type="text"
+                  required
+                  maxLength={6}
+                  monospace
+                  placeholder="e.g. 123456"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  style={{ fontSize: 20, letterSpacing: '0.3em', textAlign: 'center' }}
+                />
+              </FieldWrapper>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                <span style={{ color: '#64748b' }}>Didn't receive the code?</span>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={isLoading}
+                  style={{ background: 'none', border: 'none', color: '#1d4ed8', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                >
+                  Resend OTP
+                </button>
+              </div>
+
+              <div style={{ marginTop: 8 }}>
+                <SubmitBtn label="Verify OTP & Complete Registration" loadingLabel="Verifying…" loading={isLoading} />
+              </div>
+            </form>
+          )}
 
           <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
             Already have an account?{' '}

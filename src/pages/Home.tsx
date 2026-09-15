@@ -27,8 +27,20 @@ import { RouteModal } from '../components/map/RouteModal';
 import { calculateDistanceKm } from '../services/smartAllocation';
 
 export const Home: React.FC = () => {
-  const { medicines, sources, inventory, reservations } = useApp();
+  const { currentUser, isAuthenticated, medicines, sources, inventory, reservations } = useApp();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (currentUser.role === 'PHARMACY') {
+        navigate('/pharmacy/dashboard', { replace: true });
+      } else if (currentUser.role === 'HOSPITAL') {
+        navigate('/hospital/dashboard', { replace: true });
+      } else if (currentUser.role === 'ADMIN') {
+        navigate('/admin/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchFilter, setSearchFilter] = useState<string>('');

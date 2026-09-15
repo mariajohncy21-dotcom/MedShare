@@ -78,6 +78,7 @@ export interface Medicine {
   averageDailyDemand: number;
   sampleImageUrl?: string;
   barcode?: string;
+  prescriptionRequired?: boolean;
 }
 
 export interface InventoryItem {
@@ -93,6 +94,7 @@ export interface InventoryItem {
   batchNumber: string;
   expiryDate: string; // YYYY-MM-DD
   unitPrice: number;
+  pricePerUnit?: number;
   updatedAt: string;
   expiryStatus: ExpiryStatus;
   stockStatus: StockStatus;
@@ -100,7 +102,9 @@ export interface InventoryItem {
   longitude: number;
   dosage?: string;
   unit?: string;
+  medicineType?: string;
   lastUpdatedBy?: string;
+  prescriptionRequired?: boolean;
 }
 
 export interface StockChangeLog {
@@ -111,8 +115,11 @@ export interface StockChangeLog {
   sourceName: string;
   previousQuantity: number;
   newQuantity: number;
+  difference?: number;
   updatedBy: string;
   updatedAt: string;
+  timestamp?: string;
+  date?: string;
   reason?: string;
 }
 
@@ -161,6 +168,8 @@ export interface Reservation {
   createdAt: string; // ISO string
   expiresAt: string; // ISO string (15 mins from creation)
   qrToken: string;
+  prescriptionRequired?: boolean;
+  prescriptionAcknowledged?: boolean;
   allocationBreakdown: {
     sourceId: string;
     sourceName: string;
@@ -212,28 +221,33 @@ export interface DirectPharmacyRequest {
   rejectionReason?: string;
 }
 
-export type PharmacyRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'RESERVED' | 'COMPLETED' | 'EXPIRED';
+export type PharmacyRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'RESERVED' | 'COMPLETED' | 'EXPIRED' | 'PARTIALLY_ACCEPTED' | 'REJECTED';
 
 export interface PharmacyEmergencyRequest {
   id: string; // e.g. EMR-PH-1024
   emergencyRequestId?: string;
   pharmacyId: string;
   pharmacyName: string;
+  hospitalName?: string;
   medicineId: string;
   medicineName: string;
   requiredQuantity: number;
+  requestedQuantity?: number;
   contributedQuantity?: number;
+  acceptedQuantity?: number;
   pharmacyAvailableStock: number;
   urgency: 'CRITICAL' | 'URGENT' | 'NORMAL';
   distanceKm: number;
   createdAt: string;
   status: PharmacyRequestStatus;
   requesterName: string;
+  patientName?: string;
   requesterPhone: string;
   requesterType: 'PATIENT' | 'HOSPITAL';
   reservationId?: string;
   reservationExpiresAt?: string;
   declinedReason?: string;
+  rejectionReason?: string;
   notes?: string;
 }
 
@@ -321,6 +335,53 @@ export interface HospitalPatient {
   updatedAt?: string;
 }
 
+// ─── Daily Reports ───────────────────────────────────────────────────────────
+export type DailyReportSubmissionStatus = 'SUBMITTED' | 'PENDING' | 'DUE_SOON' | 'OVERDUE';
+
+export interface DailyHospitalReport {
+  id: string;
+  hospitalId: string;
+  hospitalName: string;
+  reportDate: string; // YYYY-MM-DD of the previous day being reported
+  submittedAt?: string;
+  submittedBy?: string;
+  previousDayPatientCount: number;
+  admissions: number;
+  discharges: number;
+  emergencyCases: number;
+  medicineConsumptionSummary: string;
+  criticalMedicineRequirements: string;
+  bedCapacitySummary: string;
+  status: DailyReportSubmissionStatus;
+  fileName?: string;
+  validationSummary?: string;
+}
+
+export interface DailyPharmacyStockReport {
+  id: string;
+  pharmacyId: string;
+  pharmacyName: string;
+  reportDate: string; // YYYY-MM-DD of the previous day being reported
+  submittedAt?: string;
+  submittedBy?: string;
+  openingStockCount: number;
+  addedStockCount: number;
+  dispensedCount: number;
+  closingStockCount: number;
+  expiryItemsCount: number;
+  lowStockItemsCount: number;
+  status: DailyReportSubmissionStatus;
+  fileName?: string;
+  validationSummary?: string;
+}
+
+export interface PatientSearchHistory {
+  id: string;
+  userId: string;
+  query: string;
+  timestamp: string;
+}
+
 // ─── Bulk Upload ─────────────────────────────────────────────────────────────
 export interface BulkUploadRow {
   medicineName: string;
@@ -332,6 +393,7 @@ export interface BulkUploadRow {
   unit?: string;
   expiryDate: string;
   unitPrice?: number | string;
+  prescriptionRequired?: boolean | string;
 }
 
 export interface BulkUploadValidatedRow {

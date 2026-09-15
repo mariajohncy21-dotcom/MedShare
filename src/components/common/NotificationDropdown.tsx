@@ -4,9 +4,27 @@ import { Bell, AlertTriangle, CheckCircle2, Clock, Truck, Info, Check } from 'lu
 import { Link } from 'react-router-dom';
 
 export const NotificationDropdown: React.FC = () => {
-  const { notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useApp();
+  const { notifications, unreadCount, markNotificationRead, markAllNotificationsRead, currentUser } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const getSafeNotificationLink = (link?: string) => {
+    if (!link) return '/pharmacy/dashboard';
+    if (currentUser?.role === 'PHARMACY') {
+      if (link.startsWith('/reservations') || link.startsWith('/patient/reservations')) return '/pharmacy/reservations';
+      if (link.startsWith('/emergency') || link.startsWith('/patient/requests')) return '/pharmacy/emergency-requests';
+      if (link.startsWith('/inventory')) return '/pharmacy/inventory';
+      if (link.startsWith('/pharmacy')) return link;
+      return '/pharmacy/dashboard';
+    }
+    if (currentUser?.role === 'HOSPITAL') {
+      if (link.startsWith('/inventory')) return '/hospital/inventory';
+      if (link.startsWith('/emergency')) return '/hospital/emergency';
+      if (link.startsWith('/hospital')) return link;
+      return '/hospital/dashboard';
+    }
+    return link;
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -140,7 +158,7 @@ export const NotificationDropdown: React.FC = () => {
                     </p>
                     {notif.link && (
                       <Link
-                        to={notif.link}
+                        to={getSafeNotificationLink(notif.link)}
                         onClick={() => {
                           markNotificationRead(notif.id);
                           setIsOpen(false);

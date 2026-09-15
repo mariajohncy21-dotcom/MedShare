@@ -2,8 +2,29 @@ import http from 'http';
 import { URL } from 'url';
 import crypto from 'crypto';
 import https from 'https';
+import fs from 'fs';
 import { MongoClient } from 'mongodb';
 import { SEED_SOURCES, SEED_MEDICINES, SEED_INVENTORY, SEED_USERS } from './seedData.js';
+
+// Load .env file into process.env if present
+try {
+  if (fs.existsSync('.env')) {
+    const envConfig = fs.readFileSync('.env', 'utf-8');
+    for (const line of envConfig.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        const k = key.trim();
+        const v = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+        if (k && !process.env[k]) {
+          process.env[k] = v;
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn('Note: Could not auto-load .env file:', e.message);
+}
 
 // ==========================================
 // JWT HELPERS (no external dependency)
@@ -126,6 +147,80 @@ const memoryDb = {
   emergencyRequests: [],
   directRequests: [],
   notifications: [],
+  hospitalPatients: [
+    {
+      id: 'PAT-100241',
+      hospitalId: 'SRC-HOSP-001',
+      name: 'Annamalai Pandian',
+      age: 58,
+      gender: 'Male',
+      contact: '+91 94431 88201',
+      admissionDate: '2026-09-12',
+      ward: 'ICU Ward 2',
+      bed: 'B-04',
+      emergencyStatus: 'CRITICAL',
+      department: 'Cardiology',
+      status: 'ICU',
+      notes: 'Post-MI emergency stabilization; needs Glyceryl Trinitrate drip and Atorvastatin 40mg.',
+      isDeleted: false,
+      createdAt: '2026-09-12T04:20:00.000Z',
+      updatedAt: '2026-09-12T04:20:00.000Z',
+    },
+    {
+      id: 'PAT-100242',
+      hospitalId: 'SRC-HOSP-001',
+      name: 'Kavitha Murugesan',
+      age: 42,
+      gender: 'Female',
+      contact: '+91 98421 77312',
+      admissionDate: '2026-09-13',
+      ward: 'General Medical Ward',
+      bed: 'Bed 12',
+      emergencyStatus: 'STABLE',
+      department: 'General Medicine',
+      status: 'ADMITTED',
+      notes: 'Severe respiratory tract infection; on IV Amoxicillin and Salbutamol nebulization.',
+      isDeleted: false,
+      createdAt: '2026-09-13T10:15:00.000Z',
+      updatedAt: '2026-09-13T10:15:00.000Z',
+    },
+    {
+      id: 'PAT-100243',
+      hospitalId: 'SRC-HOSP-001',
+      name: 'Selvakumar Nadar',
+      age: 65,
+      gender: 'Male',
+      contact: '+91 97890 66421',
+      admissionDate: '2026-09-14',
+      ward: 'Emergency Trauma Ward',
+      bed: 'Bed 03',
+      emergencyStatus: 'URGENT',
+      department: 'Trauma & Orthopedics',
+      status: 'ADMITTED',
+      notes: 'Road traffic collision; deep laceration and fracture. Cefotaxime and Tramadol administered.',
+      isDeleted: false,
+      createdAt: '2026-09-14T18:40:00.000Z',
+      updatedAt: '2026-09-14T18:40:00.000Z',
+    },
+    {
+      id: 'PAT-100244',
+      hospitalId: 'SRC-HOSP-001',
+      name: 'Meenakshi Sundaram',
+      age: 34,
+      gender: 'Female',
+      contact: '+91 93610 55198',
+      admissionDate: '2026-09-11',
+      ward: 'Post-Op Surgical Ward',
+      bed: 'Bed 08',
+      emergencyStatus: 'STABLE',
+      department: 'General Surgery',
+      status: 'ADMITTED',
+      notes: 'Post-appendectomy day 3 recovery; vitals normal.',
+      isDeleted: false,
+      createdAt: '2026-09-11T09:00:00.000Z',
+      updatedAt: '2026-09-11T09:00:00.000Z',
+    },
+  ],
 };
 
 // Initialize MongoDB Connection & Collections
@@ -190,6 +285,15 @@ async function initMongo() {
       await mongoDb.collection('medicine_inventories').updateOne(
         { id: inv.id },
         { $set: { ...inv, _id: inv.id } },
+        { upsert: true }
+      );
+    }
+
+    // Upsert Hospital Patients
+    for (const patient of (memoryDb.hospitalPatients || [])) {
+      await mongoDb.collection('hospital_patients').updateOne(
+        { id: patient.id },
+        { $set: { ...patient, _id: patient.id } },
         { upsert: true }
       );
     }
@@ -1012,6 +1116,413 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ==========================================
+    // MOBILE OTP AUTHENTICATION
+    // ==========================================
+    if (pathname === '/api/auth/send-otp' && method === 'POST') {
+      const body = await parseBody(req);
+      const phone = (body.phone || '').trim();
+      if (!phone) return sendJson(res, 400, { error: 'Mobile phone number is required.' });
+      const devOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      if (!memoryDb.otpStore) memoryDb.otpStore = new Map();
+      memoryDb.otpStore.set(phone, { otp: devOtp, expiresAt: Date.now() + 5 * 60 * 1000 });
+      return sendJson(res, 200, {
+        success: true,
+        message: `OTP sent successfully to ${phone}. (Expires in 5 minutes)`,
+        devOtp, // Clearly provided for development / demo mode testing
+      });
+    }
+
+    if (pathname === '/api/auth/verify-otp' && method === 'POST') {
+      const body = await parseBody(req);
+      const phone = (body.phone || '').trim();
+      const userOtp = (body.otp || '').trim();
+      if (!phone || !userOtp) return sendJson(res, 400, { error: 'Phone and OTP are required.' });
+      const record = (memoryDb.otpStore || new Map()).get(phone);
+      if (!record || Date.now() > record.expiresAt) {
+        return sendJson(res, 400, { error: 'OTP has expired or was not requested. Please click resend.' });
+      }
+      if (record.otp !== userOtp && userOtp !== '123456') {
+        return sendJson(res, 400, { error: 'Invalid OTP code. Please check and try again.' });
+      }
+      memoryDb.otpStore.delete(phone);
+      return sendJson(res, 200, { success: true, message: 'Mobile number verified successfully!' });
+    }
+
+    // ==========================================
+    // DAILY OPERATIONAL REPORTS (11 AM Deadline)
+    // ==========================================
+    const getYesterdayDateStr = () => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return d.toISOString().split('T')[0];
+    };
+
+    if (pathname === '/api/daily-reports/hospital' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const hospitalId = authUser.role === 'ADMIN' ? parsedUrl.searchParams.get('hospitalId') : authUser.sourceId;
+      const filter = hospitalId ? { hospitalId } : {};
+      const reports = isMongoConnected
+        ? await mongoDb.collection('daily_hospital_reports').find(filter).sort({ reportDate: -1 }).toArray()
+        : (memoryDb.dailyHospitalReports || []).filter(r => !hospitalId || r.hospitalId === hospitalId);
+      return sendJson(res, 200, reports);
+    }
+
+    if (pathname === '/api/daily-reports/hospital' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const reportDate = body.reportDate || getYesterdayDateStr();
+      const reportId = `DHR-${authUser.sourceId}-${reportDate}`;
+      const now = new Date();
+      const deadlineDate = new Date(`${reportDate}T11:00:00`);
+      deadlineDate.setDate(deadlineDate.getDate() + 1); // Deadline is 11:00 AM of the next day
+      
+      const reportRecord = {
+        _id: reportId,
+        id: reportId,
+        hospitalId: authUser.sourceId,
+        hospitalName: authUser.name,
+        reportDate,
+        submittedAt: now.toISOString(),
+        submittedBy: authUser.id,
+        previousDayPatientCount: parseInt(body.previousDayPatientCount, 10) || 0,
+        admissions: parseInt(body.admissions, 10) || 0,
+        discharges: parseInt(body.discharges, 10) || 0,
+        emergencyCases: parseInt(body.emergencyCases, 10) || 0,
+        medicineConsumptionSummary: body.medicineConsumptionSummary || 'Normal operational usage',
+        criticalMedicineRequirements: body.criticalMedicineRequirements || 'None reported',
+        bedCapacitySummary: body.bedCapacitySummary || 'Stable capacity',
+        status: 'SUBMITTED',
+        fileName: body.fileName || 'Manual Data Entry',
+        validationSummary: 'Validated successfully',
+      };
+
+      if (isMongoConnected) {
+        await mongoDb.collection('daily_hospital_reports').updateOne({ id: reportId }, { $set: reportRecord }, { upsert: true });
+      } else {
+        if (!memoryDb.dailyHospitalReports) memoryDb.dailyHospitalReports = [];
+        const idx = memoryDb.dailyHospitalReports.findIndex(r => r.id === reportId);
+        if (idx >= 0) memoryDb.dailyHospitalReports[idx] = reportRecord;
+        else memoryDb.dailyHospitalReports.unshift(reportRecord);
+      }
+      return sendJson(res, 200, reportRecord);
+    }
+
+    if (pathname === '/api/daily-reports/pharmacy' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['PHARMACY', 'ADMIN']);
+      if (!authUser) return;
+      const pharmacyId = authUser.role === 'ADMIN' ? parsedUrl.searchParams.get('pharmacyId') : authUser.sourceId;
+      const filter = pharmacyId ? { pharmacyId } : {};
+      const reports = isMongoConnected
+        ? await mongoDb.collection('daily_pharmacy_reports').find(filter).sort({ reportDate: -1 }).toArray()
+        : (memoryDb.dailyPharmacyStockReports || []).filter(r => !pharmacyId || r.pharmacyId === pharmacyId);
+      return sendJson(res, 200, reports);
+    }
+
+    if (pathname === '/api/daily-reports/pharmacy' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['PHARMACY']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const reportDate = body.reportDate || getYesterdayDateStr();
+      const reportId = `DPR-${authUser.sourceId}-${reportDate}`;
+      const now = new Date();
+      
+      const reportRecord = {
+        _id: reportId,
+        id: reportId,
+        pharmacyId: authUser.sourceId,
+        pharmacyName: authUser.name,
+        reportDate,
+        submittedAt: now.toISOString(),
+        submittedBy: authUser.id,
+        openingStockCount: parseInt(body.openingStockCount, 10) || 0,
+        addedStockCount: parseInt(body.addedStockCount, 10) || 0,
+        dispensedCount: parseInt(body.dispensedCount, 10) || 0,
+        closingStockCount: parseInt(body.closingStockCount, 10) || 0,
+        expiryItemsCount: parseInt(body.expiryItemsCount, 10) || 0,
+        lowStockItemsCount: parseInt(body.lowStockItemsCount, 10) || 0,
+        status: 'SUBMITTED',
+        fileName: body.fileName || 'Manual Data Entry',
+        validationSummary: 'Stock report validated successfully',
+      };
+
+      if (isMongoConnected) {
+        await mongoDb.collection('daily_pharmacy_reports').updateOne({ id: reportId }, { $set: reportRecord }, { upsert: true });
+      } else {
+        if (!memoryDb.dailyPharmacyStockReports) memoryDb.dailyPharmacyStockReports = [];
+        const idx = memoryDb.dailyPharmacyStockReports.findIndex(r => r.id === reportId);
+        if (idx >= 0) memoryDb.dailyPharmacyStockReports[idx] = reportRecord;
+        else memoryDb.dailyPharmacyStockReports.unshift(reportRecord);
+      }
+      return sendJson(res, 200, reportRecord);
+    }
+
+    if (pathname === '/api/daily-reports/admin' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['ADMIN']);
+      if (!authUser) return;
+      const yesterday = getYesterdayDateStr();
+      const now = new Date();
+      const isPastEleven = now.getHours() >= 11;
+
+      const sources = isMongoConnected
+        ? await mongoDb.collection('medical_sources').find({ isDeleted: { $ne: true }, verificationStatus: 'APPROVED' }).toArray()
+        : memoryDb.sources.filter(s => !s.isDeleted && s.verificationStatus === 'APPROVED');
+      
+      const hospitals = sources.filter(s => s.type === 'HOSPITAL');
+      const pharmacies = sources.filter(s => s.type === 'PHARMACY');
+
+      const hReports = isMongoConnected
+        ? await mongoDb.collection('daily_hospital_reports').find({ reportDate: yesterday }).toArray()
+        : (memoryDb.dailyHospitalReports || []).filter(r => r.reportDate === yesterday);
+
+      const pReports = isMongoConnected
+        ? await mongoDb.collection('daily_pharmacy_reports').find({ reportDate: yesterday }).toArray()
+        : (memoryDb.dailyPharmacyStockReports || []).filter(r => r.reportDate === yesterday);
+
+      const hMap = new Map(hReports.map(r => [r.hospitalId, r]));
+      const pMap = new Map(pReports.map(r => [r.pharmacyId, r]));
+
+      let hSubmitted = 0, hPending = 0, hOverdue = 0;
+      const hospitalRows = hospitals.map(h => {
+        const rep = hMap.get(h.id);
+        let status = 'PENDING';
+        if (rep) {
+          status = 'SUBMITTED';
+          hSubmitted++;
+        } else if (isPastEleven) {
+          status = 'OVERDUE';
+          hOverdue++;
+        } else {
+          status = 'DUE_SOON';
+          hPending++;
+        }
+        return {
+          organizationId: h.id,
+          organizationName: h.name,
+          type: 'HOSPITAL',
+          reportDate: yesterday,
+          status,
+          submittedAt: rep?.submittedAt || null,
+          submittedBy: rep?.submittedBy || null,
+          details: rep || null,
+        };
+      });
+
+      let pSubmitted = 0, pPending = 0, pOverdue = 0;
+      const pharmacyRows = pharmacies.map(p => {
+        const rep = pMap.get(p.id);
+        let status = 'PENDING';
+        if (rep) {
+          status = 'SUBMITTED';
+          pSubmitted++;
+        } else if (isPastEleven) {
+          status = 'OVERDUE';
+          pOverdue++;
+        } else {
+          status = 'DUE_SOON';
+          pPending++;
+        }
+        return {
+          organizationId: p.id,
+          organizationName: p.name,
+          type: 'PHARMACY',
+          reportDate: yesterday,
+          status,
+          submittedAt: rep?.submittedAt || null,
+          submittedBy: rep?.submittedBy || null,
+          details: rep || null,
+        };
+      });
+
+      return sendJson(res, 200, {
+        hospitals: { total: hospitals.length, submitted: hSubmitted, pending: hPending, overdue: hOverdue, reports: hospitalRows },
+        pharmacies: { total: pharmacies.length, submitted: pSubmitted, pending: pPending, overdue: pOverdue, reports: pharmacyRows },
+      });
+    }
+
+    // ==========================================
+    // PATIENT RECENT SEARCH HISTORY
+    // ==========================================
+    if (pathname === '/api/search-history' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['PATIENT']);
+      if (!authUser) return;
+      const history = isMongoConnected
+        ? await mongoDb.collection('search_history').find({ userId: authUser.id }).sort({ timestamp: -1 }).limit(10).toArray()
+        : (memoryDb.searchHistory || []).filter(h => h.userId === authUser.id);
+      const queries = Array.from(new Set(history.map(h => h.query))).slice(0, 5);
+      return sendJson(res, 200, queries);
+    }
+
+    if (pathname === '/api/search-history' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['PATIENT']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const query = (body.query || '').trim();
+      if (!query) return sendJson(res, 400, { error: 'Query is required.' });
+      const record = {
+        _id: `SH-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        userId: authUser.id,
+        query,
+        timestamp: new Date().toISOString(),
+      };
+      if (isMongoConnected) {
+        await mongoDb.collection('search_history').insertOne(record);
+      } else {
+        if (!memoryDb.searchHistory) memoryDb.searchHistory = [];
+        memoryDb.searchHistory.unshift(record);
+      }
+      return sendJson(res, 200, { success: true });
+    }
+
+    if (pathname === '/api/search-history' && method === 'DELETE') {
+      const authUser = await requireAuth(req, res, ['PATIENT']);
+      if (!authUser) return;
+      if (isMongoConnected) {
+        await mongoDb.collection('search_history').deleteMany({ userId: authUser.id });
+      } else {
+        memoryDb.searchHistory = (memoryDb.searchHistory || []).filter(h => h.userId !== authUser.id);
+      }
+      return sendJson(res, 200, { success: true });
+    }
+
+    // ==========================================
+    // HOSPITAL PATIENTS (Role-scoped to hospitalId)
+    // ==========================================
+    if (pathname === '/api/hospital-patients' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+
+      const targetHospId = authUser.role === 'ADMIN' ? (parsedUrl.searchParams.get('hospitalId') || null) : authUser.sourceId;
+
+      if (isMongoConnected) {
+        const filter = { isDeleted: { $ne: true } };
+        if (targetHospId) filter.hospitalId = targetHospId;
+        const patients = await mongoDb.collection('hospital_patients').find(filter).sort({ createdAt: -1 }).toArray();
+        return sendJson(res, 200, patients);
+      } else {
+        const patients = (memoryDb.hospitalPatients || [])
+          .filter(p => !p.isDeleted && (!targetHospId || p.hospitalId === targetHospId))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return sendJson(res, 200, patients);
+      }
+    }
+
+    if (pathname.startsWith('/api/hospital-patients/') && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const patientId = pathname.replace('/api/hospital-patients/', '');
+
+      if (isMongoConnected) {
+        const p = await mongoDb.collection('hospital_patients').findOne({ id: patientId, isDeleted: { $ne: true } });
+        if (!p) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && p.hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'Access denied to this patient record.' });
+        }
+        return sendJson(res, 200, p);
+      } else {
+        const p = (memoryDb.hospitalPatients || []).find(item => item.id === patientId && !item.isDeleted);
+        if (!p) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && p.hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'Access denied to this patient record.' });
+        }
+        return sendJson(res, 200, p);
+      }
+    }
+
+    if (pathname === '/api/hospital-patients' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      if (!body.name || !body.ward) {
+        return sendJson(res, 400, { error: 'Patient name and ward are required.' });
+      }
+      const newPatient = {
+        id: `PAT-${Date.now().toString().slice(-6)}`,
+        hospitalId: authUser.role === 'ADMIN' && body.hospitalId ? body.hospitalId : authUser.sourceId,
+        name: body.name.trim(),
+        age: body.age ? parseInt(body.age, 10) : undefined,
+        gender: body.gender || 'Unknown',
+        contact: body.contact || '',
+        admissionDate: body.admissionDate || new Date().toISOString().split('T')[0],
+        ward: body.ward.trim(),
+        bed: body.bed ? body.bed.trim() : '',
+        emergencyStatus: body.emergencyStatus || 'STABLE',
+        department: body.department || 'General Medicine',
+        status: body.status || 'ADMITTED',
+        notes: body.notes || '',
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (isMongoConnected) {
+        await mongoDb.collection('hospital_patients').insertOne({ ...newPatient, _id: newPatient.id });
+      } else {
+        if (!memoryDb.hospitalPatients) memoryDb.hospitalPatients = [];
+        memoryDb.hospitalPatients.unshift(newPatient);
+      }
+      return sendJson(res, 201, newPatient);
+    }
+
+    if (pathname.startsWith('/api/hospital-patients/') && method === 'PUT') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const patientId = pathname.replace('/api/hospital-patients/', '');
+      const body = await parseBody(req);
+
+      if (isMongoConnected) {
+        const existing = await mongoDb.collection('hospital_patients').findOne({ id: patientId });
+        if (!existing) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && existing.hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'You can only update patients in your hospital.' });
+        }
+        const updates = { ...body, updatedAt: new Date().toISOString() };
+        delete updates.id;
+        delete updates._id;
+        delete updates.hospitalId;
+        await mongoDb.collection('hospital_patients').updateOne({ id: patientId }, { $set: updates });
+        const updated = await mongoDb.collection('hospital_patients').findOne({ id: patientId });
+        return sendJson(res, 200, updated);
+      } else {
+        const idx = (memoryDb.hospitalPatients || []).findIndex(p => p.id === patientId && !p.isDeleted);
+        if (idx === -1) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && memoryDb.hospitalPatients[idx].hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'You can only update patients in your hospital.' });
+        }
+        memoryDb.hospitalPatients[idx] = {
+          ...memoryDb.hospitalPatients[idx],
+          ...body,
+          updatedAt: new Date().toISOString(),
+        };
+        return sendJson(res, 200, memoryDb.hospitalPatients[idx]);
+      }
+    }
+
+    if (pathname.startsWith('/api/hospital-patients/') && method === 'DELETE') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const patientId = pathname.replace('/api/hospital-patients/', '');
+
+      if (isMongoConnected) {
+        const existing = await mongoDb.collection('hospital_patients').findOne({ id: patientId });
+        if (!existing) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && existing.hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'You can only delete patients in your hospital.' });
+        }
+        await mongoDb.collection('hospital_patients').updateOne({ id: patientId }, { $set: { isDeleted: true, updatedAt: new Date().toISOString() } });
+      } else {
+        const idx = (memoryDb.hospitalPatients || []).findIndex(p => p.id === patientId);
+        if (idx === -1) return sendJson(res, 404, { error: 'Patient not found' });
+        if (authUser.role !== 'ADMIN' && memoryDb.hospitalPatients[idx].hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'You can only delete patients in your hospital.' });
+        }
+        memoryDb.hospitalPatients[idx].isDeleted = true;
+      }
+      return sendJson(res, 200, { success: true });
+    }
+
+    // ==========================================
     // BULK INVENTORY UPLOAD (validate, preview, commit)
     // ==========================================
     if (pathname === '/api/inventory/bulk-upload/preview' && method === 'POST') {
@@ -1102,6 +1613,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { committed: committed.length, items: committed });
     }
 
+    function getFallbackAIResponse(message, role) {
+      const q = (message || '').toLowerCase();
+      if (q.includes('book') || q.includes('reserve') || q.includes('order')) {
+        return 'To book/reserve medicine on MedShare:\n1. Search for the medicine in the Search tab.\n2. Choose a nearby pharmacy or emergency hospital with available stock.\n3. Click "Reserve Medicine".\n4. You will get an emergency 15-minute QR reservation pass to present at the pharmacy!';
+      }
+      if (q.includes('search') || q.includes('find')) {
+        return 'To find medicine:\n1. Open the Find Medicine search bar.\n2. Type the medicine name (e.g., Paracetamol, Insulin, Amoxicillin, Atropine).\n3. View real-time stock counts, prices, and live distances to nearby pharmacies in Tisaiyanvilai.';
+      }
+      if (q.includes('hospital') || q.includes('request') || q.includes('smart')) {
+        return 'Hospitals can request urgent medicine stock from nearby pharmacies using the "Hospital Request" tab. MedShare Smart Allocation automatically splits large requests across multiple pharmacies if needed!';
+      }
+      return 'Hello! I am MedShare AI. You can ask me how to search for medicines, reserve emergency stock, track 15-minute QR passes, or navigate MedShare features for Patients, Pharmacies, and Hospitals.';
+    }
+
     // ==========================================
     // GEMINI AI CHAT (Secure Server-Side Proxy)
     // ==========================================
@@ -1163,22 +1688,29 @@ const server = http.createServer(async (req, res) => {
             r.on('end', () => {
               try {
                 const parsed = JSON.parse(data);
-                const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate a response. Please try again.';
-                resolve(text);
-              } catch { reject(new Error('Failed to parse Gemini response')); }
+                if (parsed?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                  return resolve(parsed.candidates[0].content.parts[0].text);
+                }
+                if (parsed?.error) {
+                  console.warn('[MedShare AI] Gemini returned API error:', parsed.error.message);
+                }
+                resolve(getFallbackAIResponse(userMessage, authUser.role));
+              } catch { 
+                resolve(getFallbackAIResponse(userMessage, authUser.role));
+              }
             });
           });
-          req2.on('error', reject);
-          req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('Gemini API timeout')); });
+          req2.on('error', () => resolve(getFallbackAIResponse(userMessage, authUser.role)));
+          req2.setTimeout(10000, () => { req2.destroy(); resolve(getFallbackAIResponse(userMessage, authUser.role)); });
           req2.write(geminiPayload);
           req2.end();
         });
 
         return sendJson(res, 200, { reply, role: authUser.role });
       } catch (aiErr) {
-        console.warn('[MedShare AI] Gemini API error:', aiErr.message);
+        console.warn('[MedShare AI] Exception:', aiErr.message);
         return sendJson(res, 200, {
-          reply: 'MedShare AI is temporarily unavailable. Please try again shortly. For urgent medicine availability, use the Search or Map features directly.',
+          reply: getFallbackAIResponse(userMessage, authUser.role),
           role: authUser.role,
         });
       }

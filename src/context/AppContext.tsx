@@ -74,9 +74,11 @@ interface AppContextType {
 
   // Pharmacy Module Actions (Requirements #1 - #9)
   updatePharmacyAvailability: (sourceId: string, status: 'ACTIVE_ONLINE' | 'BUSY' | 'OFFLINE' | 'CLOSED') => void;
-  acceptPharmacyEmergencyRequest: (requestId: string, pharmacyId: string, contributedQuantity: number) => { reservationId: string };
-  declinePharmacyEmergencyRequest: (requestId: string, pharmacyId: string, reason?: string) => void;
+  acceptPharmacyEmergencyRequest: (requestId: string, param2?: string | number, param3?: number) => { reservationId: string };
+  declinePharmacyEmergencyRequest: (requestId: string, param2?: string, param3?: string) => void;
   completePharmacyDispense: (reservationId: string) => void;
+  confirmReservation: (reservationId: string) => void;
+  completeReservation: (reservationId: string) => void;
 
   // Inventory Management
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'updatedAt' | 'expiryStatus' | 'stockStatus' | 'latitude' | 'longitude'>) => void;
@@ -106,6 +108,8 @@ interface AppContextType {
   addAuditLog: (action: AuditLogItem['action'], orgName: string, orgType: AuditLogItem['organizationType'], reason: string, details?: string) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
   resetToDemoData: () => void;
 
   // Live Database Connectivity
@@ -442,9 +446,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     clearToken();
+    try {
+      localStorage.removeItem('medshare_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('medshare_refresh_token');
+      localStorage.removeItem('medshare_user_v2');
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn('Storage purge warning:', e);
+    }
     setIsAuthenticated(false);
     setCurrentUser({ id: 'guest', name: 'Guest', email: '', role: 'PATIENT' });
-    localStorage.removeItem('medshare_user_v2');
   };
 
 
@@ -773,23 +785,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const acceptPharmacyEmergencyRequest = (
     requestId: string,
-    pharmacyId: string,
-    contributedQuantity: number
+    param2?: string | number,
+    param3?: number
   ): { reservationId: string } => {
+    let pharmacyId = currentUser.sourceId || 'SRC-PHARM-001';
+    let contributedQuantity = 1;
+
+    if (typeof param2 === 'number') {
+      contributedQuantity = param2;
+    } else if (typeof param2 === 'string') {
+      pharmacyId = param2;
+      if (typeof param3 === 'number') contributedQuantity = param3;
+    }
+
     const req = pharmacyRequests.find((r) => r.id === requestId);
     const pharmacy = sources.find((s) => s.id === pharmacyId);
     const resId = `MS-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes hold
 
-    // 1. Mark pharmacy request as RESERVED
+    // 1. Mark pharmacy request as RESERVED / ACCEPTED
     setPharmacyRequests((prev) =>
       prev.map((r) =>
         r.id === requestId
           ? {
               ...r,
-              status: 'RESERVED',
+              status: 'ACCEPTED',
               contributedQuantity,
+              acceptedQuantity: contributedQuantity,
               reservationId: resId,
               reservationExpiresAt: expiresAt.toISOString(),
             }
@@ -818,7 +841,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newReservation: Reservation = {
         id: resId,
         userId: currentUser.id,
-        userName: req.requesterName || 'Emergency Patient',
+        userName: req.requesterName || req.patientName || 'Emergency Patient',
         userPhone: req.requesterPhone || '+91 98765 43210',
         medicineId: req.medicineId,
         medicineName: req.medicineName,
@@ -867,16 +890,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const declinePharmacyEmergencyRequest = (
     requestId: string,
-    pharmacyId: string,
-    reason?: string
+    param2?: string,
+    param3?: string
   ) => {
+    let pharmacyId = currentUser.sourceId || 'SRC-PHARM-001';
+    let reason = 'Stock reserved for critical walk-in patients';
+
+    if (param3 !== undefined) {
+      pharmacyId = param2 || pharmacyId;
+      reason = param3 || reason;
+    } else if (param2 !== undefined) {
+      reason = param2;
+    }
+
     setPharmacyRequests((prev) =>
       prev.map((r) =>
         r.id === requestId
           ? {
               ...r,
-              status: 'DECLINED',
-              declinedReason: reason || 'Stock reserved for critical walk-in patients',
+              status: 'REJECTED',
+              declinedReason: reason,
+              rejectionReason: reason,
             }
           : r
       )
@@ -1447,6 +1481,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAuditLog,
         markNotificationRead,
         markAllNotificationsRead,
+        markNotificationAsRead: markNotificationRead,
+        markAllNotificationsAsRead: markAllNotificationsRead,
+        confirmReservation: (resId: string) => updateReservationStatus(resId, 'CONFIRMED'),
+        completeReservation: (resId: string) => updateReservationStatus(resId, 'COLLECTED'),
         resetToDemoData,
         dbStatus,
         dbName,

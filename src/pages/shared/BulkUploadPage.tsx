@@ -93,9 +93,26 @@ export const BulkUploadPage: React.FC = () => {
   const roleLight = role === 'PHARMACY' ? '#f0fdfa' : '#f5f3ff';
   const roleBorder = role === 'PHARMACY' ? '#99f6e4' : '#ddd6fe';
 
+  const backRoute = `/${role.toLowerCase()}/inventory`;
+
   return (
     <ConsoleLayout>
       <div style={{ padding:'28px 32px', maxWidth:900, margin:'0 auto', fontFamily:'Inter, system-ui, sans-serif' }}>
+
+        {/* Back Link */}
+        <div style={{ marginBottom: 16 }}>
+          <a
+            href={backRoute}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 13, fontWeight: 600, color: '#475569',
+              textDecoration: 'none', background: '#fff', padding: '6px 12px',
+              borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+            }}
+          >
+            ← Back to Inventory
+          </a>
+        </div>
 
         {/* Header */}
         <div style={{ marginBottom:28 }}>

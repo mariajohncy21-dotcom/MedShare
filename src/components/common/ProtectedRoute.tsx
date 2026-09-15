@@ -16,7 +16,7 @@ function getRoleDashboard(role: UserRole): string {
     case 'PHARMACY': return '/pharmacy/dashboard';
     case 'HOSPITAL': return '/hospital/dashboard';
     case 'ADMIN': return '/admin/dashboard';
-    default: return '/auth/login';
+    default: return '/login';
   }
 }
 
@@ -29,79 +29,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // 1. Not authenticated at all — redirect to login
   if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  // 2. Role check — user is logged in but wrong role for this route
+  // 2. Role check — user is logged in but wrong role for this route: redirect to role dashboard directly
   if (!allowedRoles.includes(currentUser.role)) {
     const userDashboard = getRoleDashboard(currentUser.role);
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-        padding: '24px 16px',
-        fontFamily: 'Inter, system-ui, sans-serif',
-      }}>
-        <div style={{
-          maxWidth: 440, width: '100%', background: '#fff',
-          borderRadius: 20, padding: 40,
-          border: '1px solid #fecaca',
-          boxShadow: '0 20px 60px rgba(220,38,38,0.10)',
-          textAlign: 'center',
-        }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: 16,
-            background: 'linear-gradient(135deg, #fef2f2, #fee2e2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 24px', border: '1px solid #fecaca',
-          }}>
-            <ShieldAlert style={{ width: 28, height: 28, color: '#dc2626' }} />
-          </div>
-
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
-            Access Denied
-          </h2>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
-            You do not have permission to access this page.
-          </p>
-
-          <div style={{
-            background: '#fef2f2', borderRadius: 12, padding: '14px 16px',
-            border: '1px solid #fecaca', marginBottom: 24, textAlign: 'left',
-          }}>
-            <p style={{ fontSize: 12.5, color: '#7f1d1d', margin: '0 0 6px', fontWeight: 600 }}>
-              Why am I seeing this?
-            </p>
-            <p style={{ fontSize: 12, color: '#991b1b', margin: 0, lineHeight: 1.6 }}>
-              You are logged in as <strong>{currentUser.name}</strong> ({currentUser.role}).
-              This section requires: <strong>{allowedRoles.join(', ')}</strong> access.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <a href={userDashboard} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '12px 24px',
-              background: 'linear-gradient(135deg, #1d4ed8, #1e40af)',
-              color: '#fff', fontWeight: 700, fontSize: 13,
-              borderRadius: 10, textDecoration: 'none',
-              boxShadow: '0 4px 12px rgba(29,78,216,0.3)',
-            }}>
-              <ArrowRight style={{ width: 15, height: 15 }} />
-              Go to My Dashboard
-            </a>
-            <a href="/auth/login" style={{
-              display: 'block', padding: '11px 24px',
-              background: '#f1f5f9', color: '#475569',
-              fontWeight: 600, fontSize: 12.5, borderRadius: 10,
-              textDecoration: 'none', border: '1px solid #e2e8f0',
-            }}>
-              Sign in with a different account
-            </a>
-          </div>
-        </div>
-      </div>
-    );
+    return <Navigate to={userDashboard} replace />;
   }
 
   // 3. Approval check for Pharmacy / Hospital
