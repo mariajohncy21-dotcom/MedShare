@@ -55,6 +55,7 @@ export interface MedicalSource {
   rating: number;
   emergencySupport24x7: boolean;
   registrationNumber: string;
+  licenseNumber?: string;
   documentUrl?: string;
   logoUrl?: string;
   imageUrl?: string;
@@ -182,7 +183,10 @@ export interface EmergencyRequest {
   latitude?: number;
   longitude?: number;
   additionalNotes?: string;
-  status: 'BROADCASTING' | 'MATCHED' | 'FULFILLED' | 'CANCELLED';
+  hospitalId?: string;
+  requesterId?: string;
+  requestedQuantity?: number;
+  status: 'BROADCASTING' | 'MATCHED' | 'FULFILLED' | 'CANCELLED' | 'PENDING';
   createdAt: string;
   matchedSourcesCount: number;
 }

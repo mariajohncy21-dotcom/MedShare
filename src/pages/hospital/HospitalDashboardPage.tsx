@@ -325,7 +325,7 @@ export const HospitalDashboardPage: React.FC = () => {
               <div key={r.id} style={{ background:'#fff', borderRadius:12, padding:'16px 20px', border:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <div>
                   <p style={{ fontSize:14, fontWeight:700, color:'#0f172a', margin:'0 0 4px' }}>{r.medicineName}</p>
-                  <p style={{ fontSize:12, color:'#64748b', margin:0 }}>{r.id} · {r.requestedQuantity} units · {r.urgency}</p>
+                  <p style={{ fontSize:12, color:'#64748b', margin:0 }}>{r.id} · {r.requestedQuantity || r.quantity} units · {r.urgency}</p>
                 </div>
                 <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:99, background:r.status==='FULFILLED'?'#f0fdf4':r.status==='PENDING'?'#fffbeb':'#f5f3ff', color:r.status==='FULFILLED'?'#166534':r.status==='PENDING'?'#d97706':'#6d28d9', border:'1px solid #e2e8f0' }}>{r.status}</span>
               </div>
