@@ -1,8 +1,79 @@
 import http from 'http';
 import { URL } from 'url';
 import crypto from 'crypto';
+import https from 'https';
 import { MongoClient } from 'mongodb';
 import { SEED_SOURCES, SEED_MEDICINES, SEED_INVENTORY, SEED_USERS } from './seedData.js';
+
+// ==========================================
+// JWT HELPERS (no external dependency)
+// ==========================================
+const JWT_SECRET = process.env.JWT_SECRET || 'medshare-sih-jwt-secret-2026-tisaiyanvilai';
+const JWT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function base64urlEncode(str) {
+  return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function signJWT(payload) {
+  const header = base64urlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = base64urlEncode(JSON.stringify({ ...payload, iat: Date.now(), exp: Date.now() + JWT_EXPIRY_MS }));
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return `${header}.${body}.${sig}`;
+}
+
+function verifyJWT(token) {
+  try {
+    const parts = (token || '').split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, sig] = parts;
+    const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    if (sig !== expectedSig) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64').toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
+}
+
+function extractToken(req) {
+  const auth = req.headers['authorization'] || '';
+  if (auth.startsWith('Bearer ')) return auth.slice(7);
+  return null;
+}
+
+// requireAuth: authenticate request and optionally check allowed roles
+// Returns { user } on success, or sends 401/403 and returns null
+async function requireAuth(req, res, allowedRoles = []) {
+  const token = extractToken(req);
+  if (!token) {
+    sendJson(res, 401, { error: 'Authentication required. Please log in.' });
+    return null;
+  }
+  const payload = verifyJWT(token);
+  if (!payload) {
+    sendJson(res, 401, { error: 'Session expired or invalid. Please log in again.' });
+    return null;
+  }
+  if (allowedRoles.length > 0 && !allowedRoles.includes(payload.role)) {
+    sendJson(res, 403, { error: `Access denied. This action requires one of: ${allowedRoles.join(', ')}.` });
+    return null;
+  }
+  // Check account not suspended/deleted
+  if (payload.accountStatus === 'DELETED') {
+    sendJson(res, 403, { error: 'This account has been permanently decommissioned.' });
+    return null;
+  }
+  if (payload.accountStatus === 'SUSPENDED') {
+    sendJson(res, 403, { error: 'This account has been suspended. Contact the administrator.' });
+    return null;
+  }
+  return payload;
+}
+
+// AI Chat Rate Limiting (simple in-memory)
+const aiRateLimit = new Map(); // userId -> { count, windowStart }
+const AI_RATE_LIMIT = 30; // requests per window
+const AI_RATE_WINDOW_MS = 60 * 1000; // 1 minute
 
 const PORT = process.env.PORT || 8080;
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
@@ -260,7 +331,15 @@ const server = http.createServer(async (req, res) => {
         source: sourceData,
       };
 
-      return sendJson(res, 200, sanitizedUser);
+      const token = signJWT({
+        id: sanitizedUser.id,
+        email: sanitizedUser.email,
+        role: sanitizedUser.role,
+        sourceId: sanitizedUser.sourceId || null,
+        accountStatus: sanitizedUser.accountStatus,
+        name: sanitizedUser.name,
+      });
+      return sendJson(res, 200, { ...sanitizedUser, token });
     }
 
     // ==========================================
@@ -430,7 +509,15 @@ const server = http.createServer(async (req, res) => {
         source: newSource,
       };
 
-      return sendJson(res, 201, sanitized);
+      const token = signJWT({
+        id: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+        sourceId: newUser.sourceId || null,
+        accountStatus: newUser.accountStatus,
+        name: newUser.name,
+      });
+      return sendJson(res, 201, { ...sanitized, token });
     }
 
     // ==========================================
@@ -503,52 +590,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, list);
     }
 
-    // Add or Update Inventory Line
-    if (pathname === '/api/inventory/update' && method === 'POST') {
-      const body = await parseBody(req);
-      const safeQty = Math.max(0, parseInt(body.quantity || '0', 10));
-
-      const updateData = {
-        sourceId: body.sourceId,
-        medicineId: body.medicineId,
-        medicineName: body.medicineName,
-        dosage: body.dosage || 'Standard',
-        quantity: safeQty,
-        batchNumber: body.batchNumber || `BATCH-${Date.now().toString().slice(-4)}`,
-        expiryDate: body.expiryDate || '2027-12-31',
-        unitPrice: body.unitPrice || 50,
-        updatedAt: new Date().toISOString(),
-        expiryStatus: 'SAFE',
-        stockStatus: safeQty === 0 ? 'OUT_OF_STOCK' : safeQty <= 15 ? 'CRITICAL' : safeQty <= 35 ? 'LOW' : 'GOOD',
-        latitude: 8.4184,
-        longitude: 77.8732,
-      };
-
-      if (isMongoConnected) {
-        await mongoDb.collection('medicine_inventories').updateOne(
-          { sourceId: body.sourceId, medicineId: body.medicineId },
-          { $set: updateData },
-          { upsert: true }
-        );
-        const item = await mongoDb.collection('medicine_inventories').findOne({
-          sourceId: body.sourceId,
-          medicineId: body.medicineId,
-        });
-        return sendJson(res, 200, item);
-      }
-
-      const existingIdx = memoryDb.inventory.findIndex(
-        (i) => i.sourceId === body.sourceId && i.medicineId === body.medicineId
-      );
-      if (existingIdx >= 0) {
-        memoryDb.inventory[existingIdx] = { ...memoryDb.inventory[existingIdx], ...updateData };
-        return sendJson(res, 200, memoryDb.inventory[existingIdx]);
-      } else {
-        const newItem = { id: `INV-${Date.now().toString().slice(-4)}`, ...updateData };
-        memoryDb.inventory.push(newItem);
-        return sendJson(res, 200, newItem);
-      }
-    }
+    // NOTE: /api/inventory/update POST is handled below with proper RBAC auth
 
     // Delete or Archive Inventory Item
     if (pathname.startsWith('/api/inventory/') && method === 'DELETE') {
@@ -875,6 +917,318 @@ const server = http.createServer(async (req, res) => {
       }
       memoryDb.notifications.unshift(newNotif);
       return sendJson(res, 200, newNotif);
+    }
+
+    // ==========================================
+    // HOSPITAL PATIENT MANAGEMENT
+    // ==========================================
+    if (pathname === '/api/hospital/patients' && method === 'GET') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const hospitalId = authUser.role === 'ADMIN' ? (parsedUrl.searchParams.get('hospitalId') || null) : authUser.sourceId;
+      const filter = { isDeleted: { $ne: true } };
+      if (hospitalId) filter.hospitalId = hospitalId;
+      if (isMongoConnected) {
+        const patients = await mongoDb.collection('hospital_patients').find(filter).sort({ admissionDate: -1 }).toArray();
+        return sendJson(res, 200, patients);
+      }
+      const memPatients = (memoryDb.hospitalPatients || []).filter(p =>
+        (!hospitalId || p.hospitalId === hospitalId) && !p.isDeleted
+      );
+      return sendJson(res, 200, memPatients);
+    }
+
+    if (pathname === '/api/hospital/patients' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const patientId = `PAT-${Date.now().toString().slice(-6)}`;
+      const newPatient = {
+        _id: patientId,
+        id: patientId,
+        hospitalId: authUser.sourceId,
+        name: body.name || 'Unknown Patient',
+        age: body.age || null,
+        gender: body.gender || 'Unknown',
+        contact: body.contact || '',
+        admissionDate: body.admissionDate || new Date().toISOString().split('T')[0],
+        ward: body.ward || 'General',
+        bed: body.bed || '',
+        emergencyStatus: body.emergencyStatus || 'STABLE',
+        department: body.department || 'General Medicine',
+        status: body.status || 'ADMITTED',
+        notes: body.notes || '',
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+        createdBy: authUser.id,
+      };
+      if (isMongoConnected) {
+        await mongoDb.collection('hospital_patients').insertOne(newPatient);
+        return sendJson(res, 201, newPatient);
+      }
+      if (!memoryDb.hospitalPatients) memoryDb.hospitalPatients = [];
+      memoryDb.hospitalPatients.unshift(newPatient);
+      return sendJson(res, 201, newPatient);
+    }
+
+    if (pathname.startsWith('/api/hospital/patients/') && method === 'PUT') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const patientId = pathname.split('/').pop();
+      const body = await parseBody(req);
+      // Ownership check: hospital can only update its own patients
+      if (authUser.role === 'HOSPITAL') {
+        const existing = isMongoConnected
+          ? await mongoDb.collection('hospital_patients').findOne({ id: patientId })
+          : (memoryDb.hospitalPatients || []).find(p => p.id === patientId);
+        if (!existing || existing.hospitalId !== authUser.sourceId) {
+          return sendJson(res, 403, { error: 'You can only update patients belonging to your hospital.' });
+        }
+      }
+      if (isMongoConnected) {
+        await mongoDb.collection('hospital_patients').updateOne({ id: patientId }, { $set: { ...body, updatedAt: new Date().toISOString(), updatedBy: authUser.id } });
+        const updated = await mongoDb.collection('hospital_patients').findOne({ id: patientId });
+        return sendJson(res, 200, updated);
+      }
+      const idx = (memoryDb.hospitalPatients || []).findIndex(p => p.id === patientId);
+      if (idx >= 0) {
+        memoryDb.hospitalPatients[idx] = { ...memoryDb.hospitalPatients[idx], ...body, updatedAt: new Date().toISOString() };
+        return sendJson(res, 200, memoryDb.hospitalPatients[idx]);
+      }
+      return sendJson(res, 404, { error: 'Patient not found' });
+    }
+
+    if (pathname.startsWith('/api/hospital/patients/') && method === 'DELETE') {
+      const authUser = await requireAuth(req, res, ['HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const patientId = pathname.split('/').pop();
+      if (isMongoConnected) {
+        await mongoDb.collection('hospital_patients').updateOne({ id: patientId }, { $set: { isDeleted: true } });
+        return sendJson(res, 200, { success: true });
+      }
+      const idx = (memoryDb.hospitalPatients || []).findIndex(p => p.id === patientId);
+      if (idx >= 0) memoryDb.hospitalPatients[idx].isDeleted = true;
+      return sendJson(res, 200, { success: true });
+    }
+
+    // ==========================================
+    // BULK INVENTORY UPLOAD (validate, preview, commit)
+    // ==========================================
+    if (pathname === '/api/inventory/bulk-upload/preview' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['PHARMACY', 'HOSPITAL']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      const sourceId = authUser.sourceId;
+      const valid = [];
+      const invalid = [];
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const errors = [];
+        if (!r.medicineName) errors.push('Missing medicine name');
+        const qty = parseInt(r.quantity, 10);
+        if (isNaN(qty)) errors.push('Quantity must be a number');
+        else if (qty < 0) errors.push('Quantity cannot be negative');
+        if (!r.batchNumber) errors.push('Missing batch number');
+        if (!r.expiryDate) errors.push('Missing expiry date');
+        else if (isNaN(Date.parse(r.expiryDate))) errors.push('Invalid expiry date format (YYYY-MM-DD)');
+        if (errors.length > 0) {
+          invalid.push({ row: i + 1, data: r, errors });
+        } else {
+          valid.push({ row: i + 1, data: { ...r, quantity: qty, sourceId }, errors: [] });
+        }
+      }
+      return sendJson(res, 200, {
+        totalRows: rows.length,
+        validRows: valid.length,
+        invalidRows: invalid.length,
+        valid,
+        invalid,
+      });
+    }
+
+    if (pathname === '/api/inventory/bulk-upload/commit' && method === 'POST') {
+      const authUser = await requireAuth(req, res, ['PHARMACY', 'HOSPITAL']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      const sourceId = authUser.sourceId;
+      const committed = [];
+      for (const row of rows) {
+        const qty = Math.max(0, parseInt(row.quantity, 10) || 0);
+        const invItem = {
+          id: row.id || `INV-BULK-${Date.now().toString().slice(-5)}-${Math.random().toString(36).slice(2,5)}`,
+          sourceId,
+          medicineId: row.medicineId || `MED-GENERIC-${row.medicineName?.replace(/\s+/g,'').slice(0,5).toUpperCase()}`,
+          medicineName: row.medicineName,
+          dosage: row.dosage || row.strength || 'Standard',
+          medicineType: row.medicineType || 'General',
+          batchNumber: row.batchNumber,
+          quantity: qty,
+          unit: row.unit || 'Units',
+          expiryDate: row.expiryDate,
+          unitPrice: parseFloat(row.unitPrice) || 50,
+          updatedAt: new Date().toISOString(),
+          updatedBy: authUser.id,
+          expiryStatus: 'SAFE',
+          stockStatus: qty === 0 ? 'OUT_OF_STOCK' : qty <= 15 ? 'CRITICAL' : qty <= 35 ? 'LOW' : 'GOOD',
+          latitude: 8.4184,
+          longitude: 77.8732,
+          bulkUploaded: true,
+        };
+        if (isMongoConnected) {
+          await mongoDb.collection('medicine_inventories').updateOne(
+            { sourceId, batchNumber: invItem.batchNumber, medicineName: invItem.medicineName },
+            { $set: { ...invItem, _id: invItem.id } },
+            { upsert: true }
+          );
+        } else {
+          const idx = memoryDb.inventory.findIndex(i => i.sourceId === sourceId && i.batchNumber === invItem.batchNumber);
+          if (idx >= 0) memoryDb.inventory[idx] = { ...memoryDb.inventory[idx], ...invItem };
+          else memoryDb.inventory.push(invItem);
+        }
+        committed.push(invItem);
+      }
+      // Audit log
+      const auditEntry = {
+        _id: `AUD-BULK-${Date.now()}`, id: `AUD-BULK-${Date.now()}`,
+        action: 'ORGANIZATION_APPROVED', organizationName: authUser.name,
+        organizationType: authUser.role, performedBy: authUser.name,
+        date: new Date().toLocaleDateString('en-GB'),
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        reason: `Bulk upload: ${committed.length} inventory items imported.`,
+      };
+      if (isMongoConnected) await mongoDb.collection('audit_logs').insertOne(auditEntry);
+      return sendJson(res, 200, { committed: committed.length, items: committed });
+    }
+
+    // ==========================================
+    // GEMINI AI CHAT (Secure Server-Side Proxy)
+    // ==========================================
+    if (pathname === '/api/ai/chat' && method === 'POST') {
+      const authUser = await requireAuth(req, res);
+      if (!authUser) return;
+
+      // Rate limiting
+      const now = Date.now();
+      const rl = aiRateLimit.get(authUser.id) || { count: 0, windowStart: now };
+      if (now - rl.windowStart > AI_RATE_WINDOW_MS) {
+        aiRateLimit.set(authUser.id, { count: 1, windowStart: now });
+      } else if (rl.count >= AI_RATE_LIMIT) {
+        return sendJson(res, 429, { error: 'Too many AI requests. Please wait a moment.' });
+      } else {
+        rl.count++;
+        aiRateLimit.set(authUser.id, rl);
+      }
+
+      const body = await parseBody(req);
+      const userMessage = (body.message || '').slice(0, 2000).trim();
+      if (!userMessage) return sendJson(res, 400, { error: 'Message is required.' });
+
+      const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+      if (!GEMINI_API_KEY) {
+        return sendJson(res, 200, {
+          reply: 'MedShare AI is not configured on this server. Please set the GEMINI_API_KEY environment variable to enable the AI assistant.',
+          role: authUser.role,
+        });
+      }
+
+      // Role-specific system prompt
+      const roleContextMap = {
+        PATIENT: 'You are helping a patient citizen use MedShare to find medicines, make reservations, locate nearby pharmacies and hospitals, and understand emergency medicine availability. Help them navigate the patient dashboard, find nearby sources, and understand how the 15-minute QR reservation system works.',
+        PHARMACY: 'You are helping a pharmacy operator manage their MedShare pharmacy account. Help them understand inventory management, bulk uploads, responding to hospital requests (accept/partial accept/reject), managing reservations, and using the pharmacy dashboard.',
+        HOSPITAL: 'You are helping a hospital staff member use MedShare. Help them with patient management, requesting medicines from nearby pharmacies, smart allocation (splitting requests across multiple pharmacies), bulk inventory uploads, emergency requests, and tracking stock transfers.',
+        ADMIN: 'You are helping a MedShare system administrator. Help them with verifying pharmacies and hospitals, monitoring system-wide inventory, managing shortage alerts, reviewing audit logs, suspending or removing organizations, and overall platform management.',
+      };
+      const roleContext = roleContextMap[authUser.role] || roleContextMap.PATIENT;
+
+      const systemPrompt = `You are MedShare AI, a helpful assistant for the MedShare Emergency Medicine Network platform in Tisaiyanvilai, Tamil Nadu, India.\n\nYOUR ROLE CONTEXT: ${roleContext}\n\nCRITICAL RULES:\n- You are NOT a doctor, medical professional, or diagnostic tool.\n- NEVER diagnose diseases or medical conditions.\n- NEVER prescribe medications or recommend specific medicines for medical conditions.\n- NEVER advise on medicine dosages, combinations, or treatment plans.\n- NEVER replace professional medical advice.\n- For any medical advice, health symptoms, diagnoses, or treatment questions, respond with: "I can only help with MedShare platform usage and medicine availability logistics. For medical advice, please consult a qualified healthcare professional or doctor.\'\n- Focus ONLY on: medicine availability search, reservations, nearby source finding, platform navigation, hospital-pharmacy coordination, inventory management, and MedShare system usage.\n\nPlatform tagline: \'Every Minute Matters. Find. Match. Reserve. Share.\'`;
+
+      try {
+        const geminiPayload = JSON.stringify({
+          contents: [{ parts: [{ text: `${systemPrompt}\n\nUser (${authUser.role}): ${userMessage}` }] }],
+          generationConfig: { maxOutputTokens: 512, temperature: 0.7, topP: 0.9 },
+        });
+
+        const reply = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(geminiPayload) },
+          };
+          const req2 = https.request(options, (r) => {
+            let data = '';
+            r.on('data', c => data += c);
+            r.on('end', () => {
+              try {
+                const parsed = JSON.parse(data);
+                const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate a response. Please try again.';
+                resolve(text);
+              } catch { reject(new Error('Failed to parse Gemini response')); }
+            });
+          });
+          req2.on('error', reject);
+          req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('Gemini API timeout')); });
+          req2.write(geminiPayload);
+          req2.end();
+        });
+
+        return sendJson(res, 200, { reply, role: authUser.role });
+      } catch (aiErr) {
+        console.warn('[MedShare AI] Gemini API error:', aiErr.message);
+        return sendJson(res, 200, {
+          reply: 'MedShare AI is temporarily unavailable. Please try again shortly. For urgent medicine availability, use the Search or Map features directly.',
+          role: authUser.role,
+        });
+      }
+    }
+
+    // ==========================================
+    // PROTECTED INVENTORY ENDPOINTS (ownership check)
+    // ==========================================
+    if (pathname === '/api/inventory/update' && method === 'POST') {
+      // This route is already handled above, but add auth check here
+      const authUser = await requireAuth(req, res, ['PHARMACY', 'HOSPITAL', 'ADMIN']);
+      if (!authUser) return;
+      const body = await parseBody(req);
+      // Ownership: non-admin can only update their own source
+      if (authUser.role !== 'ADMIN' && body.sourceId && body.sourceId !== authUser.sourceId) {
+        return sendJson(res, 403, { error: 'You can only update inventory for your own facility.' });
+      }
+      const safeQty = Math.max(0, parseInt(body.quantity || '0', 10));
+      const updateData = {
+        sourceId: body.sourceId || authUser.sourceId,
+        medicineId: body.medicineId,
+        medicineName: body.medicineName,
+        dosage: body.dosage || 'Standard',
+        quantity: safeQty,
+        batchNumber: body.batchNumber || `BATCH-${Date.now().toString().slice(-4)}`,
+        expiryDate: body.expiryDate || '2027-12-31',
+        unitPrice: body.unitPrice || 50,
+        updatedAt: new Date().toISOString(),
+        updatedBy: authUser.id,
+        expiryStatus: 'SAFE',
+        stockStatus: safeQty === 0 ? 'OUT_OF_STOCK' : safeQty <= 15 ? 'CRITICAL' : safeQty <= 35 ? 'LOW' : 'GOOD',
+        latitude: 8.4184, longitude: 77.8732,
+      };
+      if (isMongoConnected) {
+        await mongoDb.collection('medicine_inventories').updateOne(
+          { sourceId: updateData.sourceId, medicineId: body.medicineId },
+          { $set: updateData }, { upsert: true }
+        );
+        const item = await mongoDb.collection('medicine_inventories').findOne({ sourceId: updateData.sourceId, medicineId: body.medicineId });
+        return sendJson(res, 200, item);
+      }
+      const existingIdx = memoryDb.inventory.findIndex(i => i.sourceId === updateData.sourceId && i.medicineId === body.medicineId);
+      if (existingIdx >= 0) {
+        memoryDb.inventory[existingIdx] = { ...memoryDb.inventory[existingIdx], ...updateData };
+        return sendJson(res, 200, memoryDb.inventory[existingIdx]);
+      } else {
+        const newItem = { id: `INV-${Date.now().toString().slice(-4)}`, ...updateData };
+        memoryDb.inventory.push(newItem);
+        return sendJson(res, 200, newItem);
+      }
     }
 
     // Default 404

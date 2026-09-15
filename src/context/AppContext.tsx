@@ -30,7 +30,8 @@ import {
   INITIAL_NOTIFICATIONS,
   getExpiryStatus,
 } from '../data/mockData';
-import { api } from '../services/api';
+import { api, setToken, clearToken } from '../services/api';
+
 import { calculateDistanceKm } from '../services/smartAllocation';
 
 interface AppContextType {
@@ -39,8 +40,9 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   register: (data: any) => Promise<{ success: boolean; error?: string; user?: User }>;
   logout: () => void;
-  switchRole: (role: UserRole) => void;
   updateUserProfile: (updates: Partial<User>) => void;
+  isAuthenticated: boolean;
+
   medicines: Medicine[];
   sources: MedicalSource[];
   inventory: InventoryItem[];
@@ -116,9 +118,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial states or from localStorage
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!(localStorage.getItem('medshare_token') && localStorage.getItem('medshare_user_v2'));
+  });
+
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const saved = localStorage.getItem('medshare_user_v2');
-    return saved ? JSON.parse(saved) : MOCK_USERS.patient;
+    return saved ? JSON.parse(saved) : { id: 'guest', name: 'Guest', email: '', role: 'PATIENT' as const };
   });
 
   const [medicines, setMedicines] = useState<Medicine[]>(MOCK_MEDICINES);
@@ -394,8 +400,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string
   ): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
-      const user = await api.auth.login({ email, password });
+      const response = await api.auth.login({ email, password });
+      const { token, ...user } = response as any;
+      if (token) {
+        setToken(token);
+      }
       setCurrentUser(user);
+      setIsAuthenticated(true);
       localStorage.setItem('medshare_user_v2', JSON.stringify(user));
       return { success: true, user };
     } catch (err: any) {
@@ -412,10 +423,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     data: any
   ): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
-      const user = await api.auth.register(data);
-      // Auto-login citizen patients
+      const response = await api.auth.register(data);
+      const { token, ...user } = response as any;
+      if (token) {
+        setToken(token);
+      }
+      // Auto-login citizen patients after registration
       if (user.role === 'PATIENT') {
         setCurrentUser(user);
+        setIsAuthenticated(true);
         localStorage.setItem('medshare_user_v2', JSON.stringify(user));
       }
       return { success: true, user };
@@ -425,17 +441,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = () => {
-    const guestPatient = MOCK_USERS.patient;
-    setCurrentUser(guestPatient);
+    clearToken();
+    setIsAuthenticated(false);
+    setCurrentUser({ id: 'guest', name: 'Guest', email: '', role: 'PATIENT' });
     localStorage.removeItem('medshare_user_v2');
   };
 
-  const switchRole = (role: UserRole) => {
-    if (role === 'PATIENT') setCurrentUser(MOCK_USERS.patient);
-    else if (role === 'PHARMACY') setCurrentUser(MOCK_USERS.pharmacy);
-    else if (role === 'HOSPITAL') setCurrentUser(MOCK_USERS.hospital);
-    else if (role === 'ADMIN') setCurrentUser(MOCK_USERS.admin);
-  };
+
+
 
   const updateUserProfile = (updates: Partial<User>) => {
     setCurrentUser((prev) => {
@@ -1392,8 +1405,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         register,
         logout,
-        switchRole,
+        isAuthenticated,
         updateUserProfile,
+
         medicines,
         sources,
         inventory,

@@ -1,8 +1,8 @@
-import React from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
-import { ShieldAlert, Lock, ArrowLeft, LogIn, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, Lock, LogIn, AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface ProtectedRouteProps {
   allowedRoles: UserRole[];
@@ -10,108 +10,163 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+function getRoleDashboard(role: UserRole): string {
+  switch (role) {
+    case 'PATIENT': return '/patient/dashboard';
+    case 'PHARMACY': return '/pharmacy/dashboard';
+    case 'HOSPITAL': return '/hospital/dashboard';
+    case 'ADMIN': return '/admin/dashboard';
+    default: return '/auth/login';
+  }
+}
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   allowedRoles,
   requireApproval = false,
   children,
 }) => {
-  const { currentUser, sources } = useApp();
+  const { currentUser, isAuthenticated, sources } = useApp();
 
-  // 1. Role Authorization Check
+  // 1. Not authenticated at all — redirect to login
+  if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  // 2. Role check — user is logged in but wrong role for this route
   if (!allowedRoles.includes(currentUser.role)) {
+    const userDashboard = getRoleDashboard(currentUser.role);
     return (
-      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-red-200 shadow-xl text-center space-y-5 animate-scale-up">
-          <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
-            <ShieldAlert className="w-8 h-8" />
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+        padding: '24px 16px',
+        fontFamily: 'Inter, system-ui, sans-serif',
+      }}>
+        <div style={{
+          maxWidth: 440, width: '100%', background: '#fff',
+          borderRadius: 20, padding: 40,
+          border: '1px solid #fecaca',
+          boxShadow: '0 20px 60px rgba(220,38,38,0.10)',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 16,
+            background: 'linear-gradient(135deg, #fef2f2, #fee2e2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 24px', border: '1px solid #fecaca',
+          }}>
+            <ShieldAlert style={{ width: 28, height: 28, color: '#dc2626' }} />
           </div>
 
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black text-slate-900">Access Restricted</h2>
-            <p className="text-xs text-slate-500">
-              Role-Based Access Control (RBAC) Enforcement
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
+            Access Denied
+          </h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
+            You do not have permission to access this page.
+          </p>
+
+          <div style={{
+            background: '#fef2f2', borderRadius: 12, padding: '14px 16px',
+            border: '1px solid #fecaca', marginBottom: 24, textAlign: 'left',
+          }}>
+            <p style={{ fontSize: 12.5, color: '#7f1d1d', margin: '0 0 6px', fontWeight: 600 }}>
+              Why am I seeing this?
+            </p>
+            <p style={{ fontSize: 12, color: '#991b1b', margin: 0, lineHeight: 1.6 }}>
+              You are logged in as <strong>{currentUser.name}</strong> ({currentUser.role}).
+              This section requires: <strong>{allowedRoles.join(', ')}</strong> access.
             </p>
           </div>
 
-          <div className="p-4 bg-red-50 rounded-2xl border border-red-100 text-xs text-slate-700 space-y-2 text-left">
-            <p>
-              Your current active account (<strong>{currentUser.name}</strong>) is logged in as{' '}
-              <span className="font-extrabold text-red-700 bg-red-100 px-2 py-0.5 rounded">{currentUser.role}</span>.
-            </p>
-            <p>
-              This portal requires one of the following authorized roles:{' '}
-              <strong className="text-slate-900">{allowedRoles.join(', ')}</strong>.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2 pt-2">
-            <Link
-              to="/auth/login"
-              className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Switch Account / Sign In with Required Role</span>
-            </Link>
-
-            <Link
-              to="/"
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-            >
-              Return to Homepage
-            </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <a href={userDashboard} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '12px 24px',
+              background: 'linear-gradient(135deg, #1d4ed8, #1e40af)',
+              color: '#fff', fontWeight: 700, fontSize: 13,
+              borderRadius: 10, textDecoration: 'none',
+              boxShadow: '0 4px 12px rgba(29,78,216,0.3)',
+            }}>
+              <ArrowRight style={{ width: 15, height: 15 }} />
+              Go to My Dashboard
+            </a>
+            <a href="/auth/login" style={{
+              display: 'block', padding: '11px 24px',
+              background: '#f1f5f9', color: '#475569',
+              fontWeight: 600, fontSize: 12.5, borderRadius: 10,
+              textDecoration: 'none', border: '1px solid #e2e8f0',
+            }}>
+              Sign in with a different account
+            </a>
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. Organization Verification Check (for Pharmacy & Hospital)
+  // 3. Approval check for Pharmacy / Hospital
   if (requireApproval && (currentUser.role === 'PHARMACY' || currentUser.role === 'HOSPITAL')) {
     const orgSource = sources.find((s) => s.id === currentUser.sourceId);
-    const isApproved = orgSource?.verificationStatus === 'APPROVED' && orgSource?.accountStatus === 'ACTIVE';
+    const isApproved =
+      orgSource?.verificationStatus === 'APPROVED' && orgSource?.accountStatus === 'ACTIVE';
 
     if (!isApproved) {
+      const status = orgSource?.verificationStatus || 'PENDING';
+      const isSuspended = orgSource?.accountStatus === 'SUSPENDED';
       return (
-        <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-amber-200 shadow-xl text-center space-y-5 animate-scale-up">
-            <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-8 h-8" />
+        <div style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #fffbeb 100%)',
+          padding: '24px 16px',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}>
+          <div style={{
+            maxWidth: 440, width: '100%', background: '#fff',
+            borderRadius: 20, padding: 40,
+            border: '1px solid #fde68a',
+            boxShadow: '0 20px 60px rgba(217,119,6,0.10)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 16,
+              background: 'linear-gradient(135deg, #fffbeb, #fef3c7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 24px', border: '1px solid #fde68a',
+            }}>
+              <AlertTriangle style={{ width: 28, height: 28, color: '#d97706' }} />
             </div>
-
-            <div className="space-y-1">
-              <h2 className="text-2xl font-black text-slate-900">Verification Pending</h2>
-              <p className="text-xs text-slate-500">
-                Organization Awaiting Drug Authority Approval
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
+              {isSuspended ? 'Account Suspended' : 'Verification Pending'}
+            </h2>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
+              {isSuspended
+                ? 'Your account has been suspended by the administrator.'
+                : 'Your organization is awaiting admin approval before you can access this portal.'}
+            </p>
+            <div style={{
+              background: '#fffbeb', borderRadius: 12, padding: '14px 16px',
+              border: '1px solid #fde68a', marginBottom: 24, textAlign: 'left',
+            }}>
+              <p style={{ fontSize: 12, color: '#92400e', margin: 0, lineHeight: 1.6 }}>
+                <strong>{currentUser.name}</strong> — Status:{' '}
+                <span style={{
+                  background: '#fde68a', color: '#78350f',
+                  padding: '2px 8px', borderRadius: 99, fontWeight: 700, fontSize: 11,
+                }}>{status}</span>
+                <br /><br />
+                {isSuspended
+                  ? 'Contact the MedShare administrator to resolve this issue.'
+                  : 'The MedShare Drug Control Authority will review your registration documents and approve or reject your account shortly.'}
               </p>
             </div>
-
-            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-slate-700 space-y-2 text-left">
-              <p>
-                <strong>{currentUser.name}</strong> is currently in{' '}
-                <span className="font-extrabold text-amber-800 bg-amber-200 px-2 py-0.5 rounded">
-                  {orgSource?.verificationStatus || 'PENDING'}
-                </span>{' '}
-                status.
-              </p>
-              <p className="text-[11px] text-amber-800">
-                In compliance with MedShare regulations, full inventory broadcasting and hospital dispatch access is restricted until an Admin reviews and approves your drug license documentation.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <Link
-                to="/auth/login"
-                className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-colors"
-              >
-                Switch Account
-              </Link>
-              <Link
-                to="/"
-                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
-              >
-                Back to Home
-              </Link>
-            </div>
+            <a href="/auth/login" style={{
+              display: 'block', padding: '12px 24px',
+              background: '#1d4ed8', color: '#fff',
+              fontWeight: 700, fontSize: 13, borderRadius: 10,
+              textDecoration: 'none',
+            }}>
+              Sign in with a different account
+            </a>
           </div>
         </div>
       );

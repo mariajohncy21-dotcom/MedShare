@@ -204,10 +204,10 @@ export const LoginPage: React.FC = () => {
       setIsLoading(false);
       if (res.success && res.user) {
         switch (res.user.role) {
-          case 'PATIENT': navigate('/search'); break;
-          case 'PHARMACY': navigate('/pharmacy'); break;
-          case 'HOSPITAL': navigate('/hospital'); break;
-          case 'ADMIN': navigate('/admin'); break;
+          case 'PATIENT': navigate('/patient/dashboard'); break;
+          case 'PHARMACY': navigate('/pharmacy/dashboard'); break;
+          case 'HOSPITAL': navigate('/hospital/dashboard'); break;
+          case 'ADMIN': navigate('/admin/dashboard'); break;
           default: navigate('/');
         }
       } else {
@@ -359,7 +359,8 @@ export const RegisterPage: React.FC = () => {
         pincode: patientData.pincode, latitude: patientData.latitude, longitude: patientData.longitude,
       });
       setIsLoading(false);
-      if (res.success) navigate('/search');
+      if (res.success) navigate('/patient/dashboard');
+
       else setErrorMessage(res.error || 'Registration failed.');
     } catch (err: any) {
       setIsLoading(false);

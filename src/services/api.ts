@@ -2,22 +2,46 @@ import { User, MedicalSource, Medicine, InventoryItem, EmergencyRequest, Reserva
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
+// ─── Token helpers ──────────────────────────────────────────────────────────
+function getToken(): string {
+  return localStorage.getItem('medshare_token') || '';
+}
+
+export function setToken(token: string) {
+  localStorage.setItem('medshare_token', token);
+}
+
+export function clearToken() {
+  localStorage.removeItem('medshare_token');
+}
+
+// ─── Core request utility ───────────────────────────────────────────────────
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const headers = {
+  const token = getToken();
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(options.headers as Record<string, string> || {}),
   };
 
   try {
     const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+      clearToken();
+      // Let caller handle redirect; throw generic auth error
+      throw new Error('401: Authentication required. Please log in.');
+    }
+    if (res.status === 403) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`403: ${body.error || 'Access denied.'}`);
+    }
     if (!res.ok) {
       const errorText = await res.text().catch(() => '');
       throw new Error(`HTTP ${res.status}: ${errorText || res.statusText}`);
     }
     return (await res.json()) as T;
   } catch (err: any) {
-    // Graceful log for offline / async operations
     console.warn(`[MedShare API] Request to ${endpoint} failed:`, err.message || err);
     throw err;
   }
@@ -27,13 +51,13 @@ export const api = {
   // Authentication
   auth: {
     login: async (credentials: { email: string; password: string }) => {
-      return request<User>('/auth/login', {
+      return request<User & { token?: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       });
     },
     register: async (userData: any) => {
-      return request<User>('/auth/register', {
+      return request<User & { token?: string }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(userData),
       });
@@ -90,14 +114,53 @@ export const api = {
     }) => {
       return request<InventoryItem>('/inventory/update', {
         method: 'POST',
-        body: JSON.stringify({
-          ...payload,
-          pricePerUnit: payload.unitPrice,
-        }),
+        body: JSON.stringify({ ...payload, pricePerUnit: payload.unitPrice }),
       });
     },
     deleteStock: async (id: string) => {
       return request<{ success: boolean; deletedId: string }>(`/inventory/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    // Bulk upload — preview (validate only, no DB write)
+    bulkPreview: async (rows: any[]) => {
+      return request<{
+        totalRows: number; validRows: number; invalidRows: number;
+        valid: any[]; invalid: any[];
+      }>('/inventory/bulk-upload/preview', {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      });
+    },
+    // Bulk upload — commit (write validated rows to DB)
+    bulkCommit: async (rows: any[]) => {
+      return request<{ committed: number; items: any[] }>('/inventory/bulk-upload/commit', {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      });
+    },
+  },
+
+  // Hospital Patients (Hospital-scoped)
+  hospitalPatients: {
+    getAll: async (hospitalId?: string) => {
+      const q = hospitalId ? `?hospitalId=${encodeURIComponent(hospitalId)}` : '';
+      return request<any[]>(`/hospital/patients${q}`);
+    },
+    create: async (patientData: any) => {
+      return request<any>('/hospital/patients', {
+        method: 'POST',
+        body: JSON.stringify(patientData),
+      });
+    },
+    update: async (id: string, updates: any) => {
+      return request<any>(`/hospital/patients/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+    },
+    delete: async (id: string) => {
+      return request<{ success: boolean }>(`/hospital/patients/${id}`, {
         method: 'DELETE',
       });
     },
@@ -201,6 +264,9 @@ export const api = {
     getNetworkStats: async () => {
       return request<any>('/admin/network-stats');
     },
+    getAllSources: async () => {
+      return request<MedicalSource[]>('/sources');
+    },
   },
 
   // Notifications
@@ -220,6 +286,16 @@ export const api = {
     markRead: async (id: string) => {
       return request<any>(`/notifications/${id}/read`, {
         method: 'PATCH',
+      });
+    },
+  },
+
+  // MedShare AI Chat (secure backend proxy - key never in frontend)
+  ai: {
+    chat: async (message: string, conversationId?: string) => {
+      return request<{ reply: string; role: string }>('/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, conversationId }),
       });
     },
   },

@@ -296,3 +296,61 @@ export interface ImageCatalogMatch {
   packagingMatched: string;
   dosage: string;
 }
+
+// ─── Hospital Patient Management ────────────────────────────────────────────
+export interface HospitalPatient {
+  id: string;
+  hospitalId: string;
+  name: string;
+  age?: number;
+  gender: 'Male' | 'Female' | 'Other' | 'Unknown';
+  contact?: string;
+  admissionDate: string;
+  ward: string;
+  bed?: string;
+  emergencyStatus: 'STABLE' | 'CRITICAL' | 'URGENT' | 'DISCHARGED';
+  department: string;
+  status: 'ADMITTED' | 'DISCHARGED' | 'TRANSFERRED' | 'ICU';
+  notes?: string;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ─── Bulk Upload ─────────────────────────────────────────────────────────────
+export interface BulkUploadRow {
+  medicineName: string;
+  medicineType?: string;
+  strength?: string;
+  dosage?: string;
+  batchNumber: string;
+  quantity: number | string;
+  unit?: string;
+  expiryDate: string;
+  unitPrice?: number | string;
+}
+
+export interface BulkUploadValidatedRow {
+  row: number;
+  data: BulkUploadRow & { sourceId?: string };
+  errors: string[];
+}
+
+export interface BulkUploadPreviewResult {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  valid: BulkUploadValidatedRow[];
+  invalid: BulkUploadValidatedRow[];
+}
+
+// ─── AI Chatbot ──────────────────────────────────────────────────────────────
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  loading?: boolean;
+  error?: boolean;
+}
+
