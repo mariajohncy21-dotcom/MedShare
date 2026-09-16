@@ -203,7 +203,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [sources, setSources] = useState<MedicalSource[]>(() => {
     const saved = localStorage.getItem('medshare_sources_v2');
-    return saved ? JSON.parse(saved) : MOCK_SOURCES;
+    const raw = saved ? JSON.parse(saved) : MOCK_SOURCES;
+    return Array.isArray(raw)
+      ? Array.from(new Map(raw.map((s: MedicalSource) => [s.id, s])).values())
+      : MOCK_SOURCES;
   });
 
   const [inventory, setInventory] = useState<InventoryItem[]>(() => {

@@ -35,6 +35,14 @@ public class AuditLog {
 
     private String details;
 
+    private String targetType;
+
+    private String targetId;
+
+    private String actorName;
+
+    private String actorRole;
+
     @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();
 }

@@ -53,6 +53,19 @@ import { SettingsPage } from './pages/SettingsPage';
 
 // Admin Console
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminPharmaciesPage } from './pages/admin/AdminPharmaciesPage';
+import { AdminHospitalsPage } from './pages/admin/AdminHospitalsPage';
+import { AdminVerificationPage } from './pages/admin/AdminVerificationPage';
+import { AdminMedicinesPage } from './pages/admin/AdminMedicinesPage';
+import { AdminInventoryPage } from './pages/admin/AdminInventoryPage';
+import { AdminShortagesPage } from './pages/admin/AdminShortagesPage';
+import { AdminRequestsPage } from './pages/admin/AdminRequestsPage';
+import { AdminReservationsPage } from './pages/admin/AdminReservationsPage';
+import { AdminTransfersPage } from './pages/admin/AdminTransfersPage';
+import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
+import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 // Shared pages
 import { BulkUploadPage } from './pages/shared/BulkUploadPage';
@@ -65,26 +78,35 @@ function ScrollToTop() {
 }
 
 // ─── Route Guards for Public & Auth Pages ───────────────────────────────────
-// Redirects authenticated Pharmacy, Hospital, or Admin users away from public pages
+// Requires user to be logged in as a citizen/patient to view the website.
+// Unauthenticated visitors are redirected to /login.
+// PHARMACY, HOSPITAL, and ADMIN are strictly redirected to their respective console dashboards.
 function PublicRouteGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isAuthenticated } = useApp();
-  if (isAuthenticated && currentUser && currentUser.id !== 'guest') {
-    if (currentUser.role === 'PHARMACY') {
-      return <Navigate to="/pharmacy/dashboard" replace />;
-    }
-    if (currentUser.role === 'HOSPITAL') {
-      return <Navigate to="/hospital/dashboard" replace />;
-    }
-    if (currentUser.role === 'ADMIN') {
-      return <Navigate to="/admin/dashboard" replace />;
-    }
+
+  // If not logged in or guest, force redirect to /login
+  if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
+    return <Navigate to="/login" replace />;
   }
+
+  // If facility or admin, strictly redirect to their console
+  if (currentUser.role === 'PHARMACY') {
+    return <Navigate to="/pharmacy/dashboard" replace />;
+  }
+  if (currentUser.role === 'HOSPITAL') {
+    return <Navigate to="/hospital/dashboard" replace />;
+  }
+  if (currentUser.role === 'ADMIN') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
   return <>{children}</>;
 }
 
-// Redirects already-authenticated users away from login/register pages
+// Route guard for auth pages - redirects logged-in users away from /login & /register
 function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isAuthenticated } = useApp();
+
   if (isAuthenticated && currentUser && currentUser.id !== 'guest') {
     if (currentUser.role === 'PHARMACY') {
       return <Navigate to="/pharmacy/dashboard" replace />;
@@ -96,66 +118,92 @@ function AuthRouteGuard({ children }: { children: React.ReactNode }) {
       return <Navigate to="/admin/dashboard" replace />;
     }
     if (currentUser.role === 'PATIENT') {
-      return <Navigate to="/patient/dashboard" replace />;
+      return <Navigate to="/" replace />;
     }
   }
+
   return <>{children}</>;
 }
 
 // ─── Navbar visibility ────────────────────────────────────────────────────────
-// Hide the public Navbar for Pharmacy, Hospital, Admin, Console, and Auth pages
+// Strictly show public Navbar ONLY when user is logged in as PATIENT
 function NavbarContainer() {
   const { pathname } = useLocation();
   const { currentUser, isAuthenticated } = useApp();
 
-  if (isAuthenticated && currentUser && currentUser.role !== 'PATIENT') {
+  // If not logged in or is guest, NEVER show navbar
+  if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
     return null;
   }
 
-  const isExcluded =
-    pathname.startsWith('/patient') ||
-    pathname.startsWith('/pharmacy') ||
-    pathname.startsWith('/hospital') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/auth') ||
-    pathname === '/login' ||
-    pathname === '/register' ||
-    pathname === '/forgot';
-  if (isExcluded) return null;
-
-  return <Navbar />;
-}
-
-function FooterContainer() {
-  const { pathname } = useLocation();
-  const { currentUser, isAuthenticated } = useApp();
-
-  if (isAuthenticated && currentUser && currentUser.role !== 'PATIENT') {
+  // If facility or admin, strictly NEVER show public navbar
+  if (currentUser.role !== 'PATIENT') {
     return null;
   }
 
-  const isExcluded =
-    pathname.startsWith('/patient') ||
-    pathname.startsWith('/pharmacy') ||
-    pathname.startsWith('/hospital') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/auth') ||
-    pathname === '/login' ||
-    pathname === '/register' ||
-    pathname === '/forgot';
-  if (isExcluded) return null;
-
-  return <Footer />;
-}
-
-function ChatbotContainer() {
-  const { pathname } = useLocation();
+  // Hide on auth routes (/login, /register, etc.)
   const isAuth =
     pathname.startsWith('/auth') ||
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/forgot';
   if (isAuth) return null;
+
+  // Hide on console routes
+  const isConsole =
+    pathname.startsWith('/pharmacy') ||
+    pathname.startsWith('/hospital') ||
+    pathname.startsWith('/admin');
+  if (isConsole) return null;
+
+  return <Navbar />;
+}
+
+// Strictly show public Footer ONLY when user is logged in as PATIENT
+function FooterContainer() {
+  const { pathname } = useLocation();
+  const { currentUser, isAuthenticated } = useApp();
+
+  // If not logged in or is guest, NEVER show footer
+  if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
+    return null;
+  }
+
+  // If facility or admin, strictly hide public footer
+  if (currentUser.role !== 'PATIENT') {
+    return null;
+  }
+
+  const isAuth =
+    pathname.startsWith('/auth') ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot';
+  if (isAuth) return null;
+
+  const isConsole =
+    pathname.startsWith('/pharmacy') ||
+    pathname.startsWith('/hospital') ||
+    pathname.startsWith('/admin');
+  if (isConsole) return null;
+
+  return <Footer />;
+}
+
+function ChatbotContainer() {
+  const { pathname } = useLocation();
+  const { currentUser, isAuthenticated } = useApp();
+
+  // Only show chatbot for logged in users
+  if (!isAuthenticated || !currentUser || currentUser.id === 'guest') return null;
+
+  const isAuth =
+    pathname.startsWith('/auth') ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot';
+  if (isAuth) return null;
+
   return <MedShareAIChatbot />;
 }
 
@@ -168,7 +216,7 @@ export function App() {
         <NavbarContainer />
 
         <Routes>
-          {/* ─── Public Routes (Protected from Pharmacy/Hospital access) ── */}
+          {/* ─── Public/Citizen Routes (Protected: Requires Login) ──────── */}
           <Route path="/" element={<PublicRouteGuard><Home /></PublicRouteGuard>} />
           <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="/search" element={<PublicRouteGuard><FindMedicine /></PublicRouteGuard>} />
@@ -177,6 +225,7 @@ export function App() {
           <Route path="/search-image" element={<Navigate to="/search" replace />} />
           <Route path="/emergency" element={<PublicRouteGuard><EmergencyRequestPage /></PublicRouteGuard>} />
           <Route path="/map" element={<PublicRouteGuard><MapViewPage /></PublicRouteGuard>} />
+          <Route path="/reservations" element={<PublicRouteGuard><Reservations /></PublicRouteGuard>} />
           <Route path="/how-it-works" element={<PublicRouteGuard><HowItWorks /></PublicRouteGuard>} />
           <Route path="/settings" element={<PublicRouteGuard><SettingsPage /></PublicRouteGuard>} />
 
@@ -217,6 +266,26 @@ export function App() {
           <Route path="/patient/notifications" element={
             <ProtectedRoute allowedRoles={['PATIENT']}>
               <PatientDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/patient/image-search" element={
+            <ProtectedRoute allowedRoles={['PATIENT']}>
+              <FindMedicine />
+            </ProtectedRoute>
+          } />
+          <Route path="/patient/nearby" element={
+            <ProtectedRoute allowedRoles={['PATIENT']}>
+              <MapViewPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/patient/profile" element={
+            <ProtectedRoute allowedRoles={['PATIENT']}>
+              <PatientDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/patient/settings" element={
+            <ProtectedRoute allowedRoles={['PATIENT']}>
+              <SettingsPage />
             </ProtectedRoute>
           } />
           <Route path="/patient/*" element={
@@ -453,34 +522,74 @@ export function App() {
               <AdminDashboardPage />
             </ProtectedRoute>
           } />
-          <Route path="/admin/verification" element={
+          <Route path="/admin/users" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminUsersPage />
             </ProtectedRoute>
           } />
           <Route path="/admin/pharmacies" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminPharmaciesPage />
             </ProtectedRoute>
           } />
           <Route path="/admin/hospitals" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminHospitalsPage />
             </ProtectedRoute>
           } />
-          <Route path="/admin/users" element={
+          <Route path="/admin/verification" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminVerificationPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/medicines" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminMedicinesPage />
             </ProtectedRoute>
           } />
           <Route path="/admin/inventory" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminInventoryPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/shortages" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminShortagesPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/requests" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminRequestsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/reservations" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminReservationsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/transfers" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminTransfersPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/analytics" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminAnalyticsPage />
             </ProtectedRoute>
           } />
           <Route path="/admin/audit-logs" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <AdminDashboardPage />
+              <AdminAuditLogsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/settings" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminSettingsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/profile" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminSettingsPage />
             </ProtectedRoute>
           } />
           <Route path="/admin/*" element={

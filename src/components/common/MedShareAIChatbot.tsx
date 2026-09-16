@@ -341,7 +341,10 @@ export const MedShareAIChatbot: React.FC = () => {
                     key={s}
                     onClick={() => sendMessage(s)}
                     style={{
-                      background: '#f1f5f9', border: '1px solid #e2e8f0',
+                      background: '#f1f5f9',
+                      borderWidth: 1,
+                      borderStyle: 'solid',
+                      borderColor: '#e2e8f0',
                       borderRadius: 99, padding: '4px 10px',
                       fontSize: 11, color: '#475569', cursor: 'pointer',
                       fontWeight: 500, transition: 'all 0.15s ease',

@@ -11,4 +11,5 @@ public interface InventoryRepository extends MongoRepository<MedicineInventory, 
     List<MedicineInventory> findBySourceId(String sourceId);
     List<MedicineInventory> findByMedicineId(String medicineId);
     List<MedicineInventory> findByMedicineIdAndQuantityGreaterThan(String medicineId, Integer minQuantity);
+    java.util.Optional<MedicineInventory> findBySourceIdAndMedicineId(String sourceId, String medicineId);
 }

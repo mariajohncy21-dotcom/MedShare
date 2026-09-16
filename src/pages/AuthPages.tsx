@@ -51,13 +51,8 @@ const AuthLayout: React.FC<{ children: React.ReactNode; maxWidth?: number }> = (
 
 // ─── Brand Mark ──────────────────────────────────────────────────────────────
 const BrandMark: React.FC = () => {
-  const { currentUser, isAuthenticated } = useApp();
-  const brandTarget = (isAuthenticated && currentUser && currentUser.id !== 'guest')
-    ? (currentUser.role === 'PHARMACY' ? '/pharmacy/dashboard' : currentUser.role === 'HOSPITAL' ? '/hospital/dashboard' : currentUser.role === 'ADMIN' ? '/admin/dashboard' : '/patient/dashboard')
-    : '/login';
-
   return (
-    <Link to={brandTarget} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+    <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
       <div style={{
         width: 40, height: 40, borderRadius: 11,
         background: 'linear-gradient(135deg, #1d4ed8, #0d9488)',
@@ -212,7 +207,7 @@ export const LoginPage: React.FC = () => {
       setIsLoading(false);
       if (res.success && res.user) {
         switch (res.user.role) {
-          case 'PATIENT': navigate('/patient/dashboard', { replace: true }); break;
+          case 'PATIENT': navigate('/', { replace: true }); break;
           case 'PHARMACY': navigate('/pharmacy/dashboard', { replace: true }); break;
           case 'HOSPITAL': navigate('/hospital/dashboard', { replace: true }); break;
           case 'ADMIN': navigate('/admin/dashboard', { replace: true }); break;
@@ -228,7 +223,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout>
+    <AuthLayout maxWidth={480}>
       {/* Top brand bar */}
       <div style={{
         padding: '28px 32px 24px',
@@ -302,7 +297,7 @@ export const LoginPage: React.FC = () => {
 
         <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
           Don't have an account?{' '}
-          <Link to="/auth/register" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>
+          <Link to="/register" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>
             Register for MedShare
           </Link>
         </div>
@@ -768,13 +763,6 @@ export const RegisterPage: React.FC = () => {
                   <p style={{ fontSize: 12, color: '#3b82f6', margin: 0 }}>
                     We sent a 6-digit verification code to <strong>{patientData.phone}</strong>.
                   </p>
-                  {devOtpHint && (
-                    <div style={{ marginTop: 8, padding: '4px 8px', background: '#dbeafe', borderRadius: 6, display: 'inline-block' }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: '#1e40af' }}>
-                        Demo Mode OTP: <code style={{ fontSize: 13, fontFamily: 'monospace' }}>{devOtpHint}</code>
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
 

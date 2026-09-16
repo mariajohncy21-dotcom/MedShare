@@ -20,6 +20,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  organizationName?: string;
   sourceId?: string; // Linked Pharmacy or Hospital ID
   address?: string;
   avatarUrl?: string;

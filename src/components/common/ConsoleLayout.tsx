@@ -4,9 +4,9 @@ import { useApp } from '../../context/AppContext';
 import {
   HeartPulse, LayoutDashboard, Package, Plus, Upload, ClipboardList,
   AlertOctagon, BookOpen, ArrowLeftRight, Bell, User, Settings, LogOut,
-  ChevronLeft, ChevronRight, Menu, X, Users, Building2, Hospital,
-  ShieldCheck, TrendingUp, FileText, Activity, Search, Map, Stethoscope,
-  CalendarCheck, Boxes, Send, RefreshCw, BarChart2,
+  ChevronLeft, ChevronRight, Menu, Users, Building2, Hospital,
+  ShieldCheck, FileText, Activity, Search, Map, Stethoscope,
+  CalendarCheck, Boxes, Send, RefreshCw, BarChart2, Globe
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { NotificationDropdown } from './NotificationDropdown';
@@ -87,15 +87,21 @@ interface ConsoleLayoutProps {
 }
 
 export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
-  const { currentUser, logout, unreadCount } = useApp();
+  const { currentUser, logout, unreadCount, sources } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const role = currentUser.role;
+  const role: UserRole = currentUser?.role || 'PATIENT';
   const navItems = NAV_ITEMS[role] || NAV_ITEMS.PATIENT;
   const rc = ROLE_CONFIG[role] || ROLE_CONFIG.PATIENT;
+
+  const userName = currentUser?.name || currentUser?.organizationName || 'User';
+  const userEmail = currentUser?.email || '';
+  const userInitial = userName.charAt(0).toUpperCase() || 'U';
+
+  const pendingVerificationsCount = sources ? sources.filter(s => s.verificationStatus === 'PENDING' && !s.isDeleted).length : 0;
 
   const handleLogout = () => {
     logout();
@@ -105,7 +111,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
 
-  const SidebarContent = () => (
+  const renderSidebarContent = () => (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
       background: '#fff', borderRight: '1px solid #e2e8f0',
@@ -151,6 +157,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
               to={item.href}
               onClick={() => setMobileSidebarOpen(false)}
               title={sidebarCollapsed ? item.label : undefined}
+              className="console-nav-item"
               style={{
                 display: 'flex', alignItems: 'center',
                 gap: 10, padding: sidebarCollapsed ? '10px 12px' : '9px 12px',
@@ -179,6 +186,14 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                   {unreadCount}
                 </span>
               )}
+              {!sidebarCollapsed && item.badge === 'VERIFY' && pendingVerificationsCount > 0 && (
+                <span style={{
+                  marginLeft: 'auto', background: '#d97706', color: '#fff',
+                  fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99,
+                }}>
+                  {pendingVerificationsCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -201,14 +216,14 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 800, color: '#fff',
             }}>
-              {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+              {userInitial}
             </div>
             <div style={{ overflow: 'hidden', flex: 1 }}>
               <p style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {currentUser.name}
+                {userName}
               </p>
               <p style={{ fontSize: 10, color: '#94a3b8', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {currentUser.email}
+                {userEmail}
               </p>
             </div>
             <span style={{
@@ -220,8 +235,28 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             </span>
           </div>
         )}
+        {role === 'PATIENT' && (
+          <Link
+            to="/"
+            title="Return to Public Website"
+            className="sidebar-website-btn"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              gap: 8, padding: '8px 10px', borderRadius: 8,
+              background: 'transparent', border: '1px solid #e2e8f0',
+              color: '#334151', fontWeight: 600, fontSize: 12.5,
+              textDecoration: 'none', marginBottom: 6,
+              transition: 'background 0.15s ease',
+            }}
+          >
+            <Globe style={{ width: 14, height: 14, color: '#2563eb', flexShrink: 0 }} />
+            {!sidebarCollapsed && <span>Public Website</span>}
+          </Link>
+        )}
         <button
           onClick={handleLogout}
+          className="sidebar-logout-btn"
           style={{
             width: '100%', display: 'flex', alignItems: 'center',
             justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
@@ -230,8 +265,6 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             color: '#dc2626', fontWeight: 600, fontSize: 12.5,
             cursor: 'pointer', transition: 'background 0.15s ease',
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <LogOut style={{ width: 14, height: 14, flexShrink: 0 }} />
           {!sidebarCollapsed && <span>Sign Out</span>}
@@ -264,11 +297,10 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
         transition: 'width 0.2s ease',
         position: 'relative', zIndex: 10,
         display: 'none',
-        // Show on desktop via media query workaround using inline block
       }}
         className="sidebar-desktop"
       >
-        <SidebarContent />
+        {renderSidebarContent()}
         {/* Collapse toggle */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -297,7 +329,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
       }}
         className="sidebar-mobile"
       >
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* Main area */}
@@ -341,9 +373,9 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             {(role === 'PHARMACY' || role === 'HOSPITAL') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                  {currentUser.name}
+                  {userName}
                 </span>
-                {currentUser.verificationStatus === 'APPROVED' && (
+                {currentUser?.verificationStatus === 'APPROVED' && (
                   <span
                     title="Verified Facility"
                     style={{
@@ -358,6 +390,26 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                 )}
               </div>
             )}
+
+            {/* Public website link - only visible for patients */}
+            {role === 'PATIENT' && (
+              <Link
+                to="/"
+                title="Return to Public Website"
+                className="topbar-website-link"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 8,
+                  background: '#f1f5f9', border: '1px solid #e2e8f0',
+                  color: '#334151', fontSize: 12, fontWeight: 700,
+                  textDecoration: 'none', transition: 'all 0.12s ease',
+                }}
+              >
+                <Globe style={{ width: 13, height: 13, color: '#2563eb' }} />
+                <span className="hidden sm:inline">Website</span>
+              </Link>
+            )}
+
             {/* Role badge */}
             <span style={{
               fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 99,
@@ -377,7 +429,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                 color: '#fff', fontWeight: 800, fontSize: 13, textDecoration: 'none',
               }}
             >
-              {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+              {userInitial}
             </Link>
           </div>
         </header>
@@ -396,6 +448,10 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
         .sidebar-desktop { display: flex !important; flex-direction: column; }
         .sidebar-mobile { display: none !important; }
         .mobile-menu-btn { display: none !important; }
+        .console-nav-item:hover { background: #f8fafc; }
+        .sidebar-website-btn:hover { background: #f8fafc !important; }
+        .sidebar-logout-btn:hover { background: #fef2f2 !important; }
+        .topbar-website-link:hover { background: #e2e8f0 !important; }
         @media (max-width: 768px) {
           .sidebar-desktop { display: none !important; }
           .sidebar-mobile { display: block !important; }
@@ -405,3 +461,4 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
     </div>
   );
 };
+export default ConsoleLayout;

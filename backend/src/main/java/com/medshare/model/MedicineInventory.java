@@ -31,6 +31,13 @@ public class MedicineInventory {
 
     private Integer quantity;
 
+    @Builder.Default
+    private Integer reservedQuantity = 0;
+
+    public Integer getReservedQuantity() {
+        return reservedQuantity == null ? 0 : reservedQuantity;
+    }
+
     private String batchNumber;
 
     private LocalDate expiryDate;

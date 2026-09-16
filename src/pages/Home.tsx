@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Medicine, MedicalSource } from '../types';
@@ -30,17 +30,20 @@ export const Home: React.FC = () => {
   const { currentUser, isAuthenticated, medicines, sources, inventory, reservations } = useApp();
   const navigate = useNavigate();
 
-  React.useEffect(() => {
-    if (isAuthenticated && currentUser) {
-      if (currentUser.role === 'PHARMACY') {
-        navigate('/pharmacy/dashboard', { replace: true });
-      } else if (currentUser.role === 'HOSPITAL') {
-        navigate('/hospital/dashboard', { replace: true });
-      } else if (currentUser.role === 'ADMIN') {
-        navigate('/admin/dashboard', { replace: true });
-      }
+  // Require login as PATIENT; redirect unauthenticated to /login, and facilities/admin to their consoles
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser || currentUser.id === 'guest') {
+      navigate('/login', { replace: true });
+      return;
     }
-  }, [isAuthenticated, currentUser, navigate]);
+    if (currentUser.role === 'PHARMACY') {
+      navigate('/pharmacy/dashboard', { replace: true });
+    } else if (currentUser.role === 'HOSPITAL') {
+      navigate('/hospital/dashboard', { replace: true });
+    } else if (currentUser.role === 'ADMIN') {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [currentUser, isAuthenticated, navigate]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -49,6 +52,10 @@ export const Home: React.FC = () => {
     medicine: Medicine;
     availableQty: number;
   } | null>(null);
+
+  if (isAuthenticated && currentUser && currentUser.id !== 'guest' && currentUser.role !== 'PATIENT') {
+    return null;
+  }
 
   const categories = [
     { id: 'ALL', label: 'All Medicines' },
