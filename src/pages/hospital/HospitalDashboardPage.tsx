@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../../context/AppContext';
 import { ConsoleLayout } from '../../components/common/ConsoleLayout';
 import { api } from '../../services/api';
@@ -13,6 +14,7 @@ import {
 
 export const HospitalDashboardPage: React.FC = () => {
   const { currentUser, inventory, sources, reservations, emergencyRequests, transfers } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [patients, setPatients] = useState<HospitalPatient[]>([]);
@@ -38,10 +40,10 @@ export const HospitalDashboardPage: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    api.hospitalPatients.getAll()
-      .then(data => {
+    api.hospitalPatients.getAll(hospId)
+      .then(res => {
         if (isMounted) {
-          setPatients(data);
+          setPatients(res || []);
           setLoading(false);
         }
       })
@@ -52,14 +54,14 @@ export const HospitalDashboardPage: React.FC = () => {
         }
       });
     return () => { isMounted = false; };
-  }, []);
+  }, [hospId]);
 
   const activeAdmissions = patients.filter(p => p.status === 'ADMITTED' || p.status === 'ICU');
   const emergencyCases = patients.filter(p => p.emergencyStatus === 'CRITICAL' || p.emergencyStatus === 'URGENT');
 
   const statCards = [
     {
-      label: 'Total Patients',
+      label: t('hospital.totalPatients'),
       value: patients.length,
       icon: Users,
       color: '#2563eb',
@@ -69,7 +71,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Enrolled in facility',
     },
     {
-      label: 'Active Admissions',
+      label: t('hospital.admittedPatientsTitle'),
       value: activeAdmissions.length,
       icon: Activity,
       color: '#7c3aed',
@@ -79,7 +81,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Wards & ICU occupancy',
     },
     {
-      label: 'Emergency Cases',
+      label: t('hospital.emergencyBroadcasts'),
       value: emergencyCases.length + myEmergencyRequests.length,
       icon: AlertOctagon,
       color: '#dc2626',
@@ -89,7 +91,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Critical inpatient & broadcast',
     },
     {
-      label: 'Total Medicines',
+      label: t('pharmacy.totalMedicines'),
       value: myInventory.length,
       icon: Package,
       color: '#0284c7',
@@ -99,7 +101,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Formulary catalog lines',
     },
     {
-      label: 'Available Stock Units',
+      label: t('pharmacy.totalAvailableStock'),
       value: totalUnits.toLocaleString(),
       icon: CheckCircle2,
       color: '#16a34a',
@@ -109,7 +111,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'In pharmacy dispensary',
     },
     {
-      label: 'Low Stock Items',
+      label: t('pharmacy.lowStockItems'),
       value: lowStockItems.length,
       icon: AlertTriangle,
       color: '#d97706',
@@ -119,7 +121,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Near minimum threshold',
     },
     {
-      label: 'Critical / Out of Stock',
+      label: t('pharmacy.criticalStockItems'),
       value: criticalStockItems.length,
       icon: AlertOctagon,
       color: '#b91c1c',
@@ -129,7 +131,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Immediate reorder required',
     },
     {
-      label: 'Pending Requests',
+      label: t('hospital.pendingRequests'),
       value: pendingRequests.length,
       icon: Clock,
       color: '#0f766e',
@@ -139,7 +141,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Pharmacy requisitions',
     },
     {
-      label: 'Active Reservations',
+      label: t('pharmacy.activePatientReservations'),
       value: activeReservations.length,
       icon: ShieldCheck,
       color: '#6366f1',
@@ -149,7 +151,7 @@ export const HospitalDashboardPage: React.FC = () => {
       sub: 'Held by partner suppliers',
     },
     {
-      label: 'Pending Transfers',
+      label: t('hospital.activeTransfers'),
       value: pendingTransfers.length,
       icon: ArrowRight,
       color: '#9333ea',
@@ -189,7 +191,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 letterSpacing: 0.5,
                 textTransform: 'uppercase',
               }}>
-                Hospital Command Center
+                {t('hospital.dashboardTitle')}
               </span>
               <span style={{
                 background: '#22c55e',
@@ -202,7 +204,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 alignItems: 'center',
                 gap: 4,
               }}>
-                <ShieldCheck style={{ width: 12, height: 12 }} /> Verified Facility
+                <ShieldCheck style={{ width: 12, height: 12 }} /> {t('common.verified')}
               </span>
             </div>
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px', color: '#fff' }}>
@@ -223,7 +225,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
               }}
             >
-              <PlusCircle style={{ width: 16, height: 16 }} /> Add Medicine
+              <PlusCircle style={{ width: 16, height: 16 }} /> {t('pharmacy.addMedicineBtn')}
             </Link>
             <Link
               to="/hospital/inventory/bulk-upload"
@@ -234,7 +236,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 fontSize: 13, border: '1px solid rgba(255,255,255,0.3)',
               }}
             >
-              <FileSpreadsheet style={{ width: 16, height: 16 }} /> Bulk Upload
+              <FileSpreadsheet style={{ width: 16, height: 16 }} /> {t('pharmacy.bulkUploadBtn')}
             </Link>
             <Link
               to="/hospital/pharmacy-search"
@@ -245,7 +247,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 fontSize: 13, border: '1px solid rgba(255,255,255,0.3)',
               }}
             >
-              <Search style={{ width: 16, height: 16 }} /> Pharmacy Search
+              <Search style={{ width: 16, height: 16 }} /> {t('hospital.pharmacySearchTitle')}
             </Link>
             <Link
               to="/hospital/emergency-requests"
@@ -256,7 +258,7 @@ export const HospitalDashboardPage: React.FC = () => {
                 fontSize: 13,
               }}
             >
-              <AlertOctagon style={{ width: 16, height: 16 }} /> Emergency Request
+              <AlertOctagon style={{ width: 16, height: 16 }} /> {t('navigation.emergencyRequests')}
             </Link>
           </div>
         </div>

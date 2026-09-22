@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { ReservationStatus } from '../types';
 import { CountdownTimer } from '../components/common/CountdownTimer';
@@ -16,9 +17,11 @@ import {
   Hospital,
   ChevronDown,
   ChevronUp,
+  FileText,
 } from 'lucide-react';
 
 export const Reservations: React.FC = () => {
+  const { t } = useTranslation();
   const { reservations, updateReservationStatus, cancelReservation } = useApp();
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'COLLECTED' | 'EXPIRED'>('ALL');
   const [expandedResId, setExpandedResId] = useState<string | null>(null);
@@ -36,31 +39,31 @@ export const Reservations: React.FC = () => {
       case 'CONFIRMED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3" /> Confirmed Hold
+            <CheckCircle2 className="w-3 h-3" /> {t('status.CONFIRMED')}
           </span>
         );
       case 'COLLECTED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-            <CheckCircle2 className="w-3 h-3" /> Collected ✓
+            <CheckCircle2 className="w-3 h-3" /> {t('status.COLLECTED')}
           </span>
         );
       case 'EXPIRED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
-            <Clock className="w-3 h-3" /> Expired
+            <Clock className="w-3 h-3" /> {t('status.EXPIRED')}
           </span>
         );
       case 'CANCELLED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
-            <XCircle className="w-3 h-3" /> Cancelled
+            <XCircle className="w-3 h-3" /> {t('status.CANCELLED')}
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-            <Clock className="w-3 h-3" /> Pending
+            <Clock className="w-3 h-3" /> {t('status.PENDING')}
           </span>
         );
     }
@@ -72,10 +75,10 @@ export const Reservations: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            My Medicine Reservations
+            {t('reservations.title')}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Real-time tracking of active 15-minute emergency stock guarantees and pickup codes.
+            {t('reservations.subtitle')}
           </p>
         </div>
 
@@ -87,7 +90,7 @@ export const Reservations: React.FC = () => {
               filterStatus === 'ALL' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All ({reservations.length})
+            {t('common.all')} ({reservations.length})
           </button>
           <button
             onClick={() => setFilterStatus('ACTIVE')}
@@ -95,7 +98,7 @@ export const Reservations: React.FC = () => {
               filterStatus === 'ACTIVE' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Active
+            {t('status.active')}
           </button>
           <button
             onClick={() => setFilterStatus('COLLECTED')}
@@ -103,7 +106,7 @@ export const Reservations: React.FC = () => {
               filterStatus === 'COLLECTED' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Collected
+            {t('status.COLLECTED')}
           </button>
           <button
             onClick={() => setFilterStatus('EXPIRED')}
@@ -111,7 +114,7 @@ export const Reservations: React.FC = () => {
               filterStatus === 'EXPIRED' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            History
+            {t('reservations.history')}
           </button>
         </div>
       </div>
@@ -120,8 +123,8 @@ export const Reservations: React.FC = () => {
       {filteredReservations.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
           <CalendarCheck className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="text-sm font-bold text-slate-700">No reservations found in this view</h3>
-          <p className="text-xs text-slate-400">Search for medicine to create a 15-minute emergency hold.</p>
+          <h3 className="text-sm font-bold text-slate-700">{t('reservations.noActive')}</h3>
+          <p className="text-xs text-slate-400">{t('reservations.subtitle')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -144,6 +147,17 @@ export const Reservations: React.FC = () => {
                         {res.id}
                       </span>
                       {getStatusBadge(res.status)}
+                      {res.prescriptionRequired && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                          <FileText className="w-3 h-3 text-amber-700" />
+                          Rx Prescription Attached
+                        </span>
+                      )}
+                      {res.isVerifiedUser && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          ✓ Verified Phone
+                        </span>
+                      )}
                       <span className="text-[10px] text-slate-400 font-medium">
                         Reserved {new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -155,6 +169,11 @@ export const Reservations: React.FC = () => {
                     <p className="text-xs text-slate-600">
                       Total Reserved: <strong className="text-blue-700 font-extrabold">{res.totalQuantity} units</strong> across{' '}
                       <strong>{res.allocationBreakdown.length} verified location(s)</strong>.
+                      {res.prescriptionDoctorName && (
+                        <span className="text-amber-800 ml-2 font-medium">
+                          • Prescribed by: <strong>{res.prescriptionDoctorName}</strong>
+                        </span>
+                      )}
                     </p>
                   </div>
 
@@ -239,16 +258,16 @@ export const Reservations: React.FC = () => {
 
                   {isActive && (
                     <div className="flex items-center justify-between pt-2 text-xs text-slate-400">
-                      <span>Show this reservation ID at the counter along with your original prescription.</span>
+                      <span>{t('reservations.presentPass')}</span>
                       <button
                         onClick={() => {
-                          if (confirm(`Cancel active reservation ${res.id}? Reserved units will be released back.`)) {
+                          if (confirm(t('reservations.cancelConfirm'))) {
                             cancelReservation(res.id);
                           }
                         }}
                         className="text-red-600 hover:underline font-semibold cursor-pointer"
                       >
-                        Cancel Reservation
+                        {t('reservations.cancelPass')}
                       </button>
                     </div>
                   )}
@@ -263,8 +282,8 @@ export const Reservations: React.FC = () => {
       {selectedQRReservation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-slate-900 mb-1">MedShare Digital Pickup Pass</h3>
-            <p className="text-xs text-slate-500 mb-4">Present to pharmacy or hospital counter</p>
+            <h3 className="text-base font-bold text-slate-900 mb-1">{t('reservations.title')}</h3>
+            <p className="text-xs text-slate-500 mb-4">{t('reservations.presentPass')}</p>
 
             {/* QR Visual */}
             <div className="w-48 h-48 mx-auto bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-white shadow-inner mb-4">
@@ -276,14 +295,14 @@ export const Reservations: React.FC = () => {
 
             <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-800 font-semibold mb-4 flex items-center justify-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>Cryptographically Verified Hold</span>
+              <span>{t('status.VERIFIED')}</span>
             </div>
 
             <button
               onClick={() => setSelectedQRReservation(null)}
               className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer"
             >
-              Close Pass
+              {t('common.close')}
             </button>
           </div>
         </div>

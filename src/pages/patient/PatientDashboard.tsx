@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../../context/AppContext';
 import { ConsoleLayout } from '../../components/common/ConsoleLayout';
 import {
@@ -58,12 +59,40 @@ const QuickAction: React.FC<{
 
 export const PatientDashboard: React.FC = () => {
   const { currentUser, reservations, emergencyRequests, notifications } = useApp();
+  const { t } = useTranslation();
 
-  const myReservations = reservations.filter(r => r.userId === currentUser.id);
+  const currentUserId = currentUser?.id || '';
+  const myReservations = (reservations || []).filter(r => currentUserId && r.userId === currentUserId);
   const activeRes = myReservations.filter(r => r.status === 'CONFIRMED' || r.status === 'PENDING');
-  const unreadNotifs = notifications.filter(n => !n.read).length;
+  const unreadNotifs = (notifications || []).filter(n => !n.read).length;
+  const safeEmergencyRequests = emergencyRequests || [];
 
   const recentReservations = myReservations.slice(0, 3);
+
+  // Aggregate user's frequently reserved medicines
+  const medCounts = myReservations.reduce((acc, r) => {
+    const key = r.medicineName;
+    if (!acc[key]) {
+      acc[key] = {
+        name: r.medicineName,
+        count: 0,
+        lastReserved: r.createdAt,
+        medicineId: r.medicineId,
+        requiresPrescription: Boolean(r.prescriptionRequired),
+      };
+    }
+    acc[key].count += 1;
+    return acc;
+  }, {} as Record<string, { name: string; count: number; lastReserved: string; medicineId: string; requiresPrescription: boolean }>);
+
+  const userFrequentMedicines = Object.values(medCounts).sort((a, b) => b.count - a.count);
+
+  const popularDefaults = [
+    { name: 'Metformin 500mg', category: 'Diabetes Care', rx: true, count: 0 },
+    { name: 'Paracetamol 650mg', category: 'Fever & Pain', rx: false, count: 0 },
+    { name: 'Amlodipine 5mg', category: 'Cardiovascular / BP', rx: true, count: 0 },
+    { name: 'Pantoprazole 40mg', category: 'Antacid / Gastric', rx: false, count: 0 },
+  ];
 
   return (
     <ConsoleLayout>
@@ -81,10 +110,10 @@ export const PatientDashboard: React.FC = () => {
             </div>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Welcome back, {currentUser.name?.split(' ')[0] || 'Patient'}
+                {t('patient.welcome')}, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Patient'}
               </h1>
               <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-                Every Minute Matters — Find. Match. Reserve. Share.
+                {t('patient.tagline')}
               </p>
             </div>
           </div>
@@ -92,22 +121,159 @@ export const PatientDashboard: React.FC = () => {
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
-          <StatCard label="Active Reservations" value={activeRes.length} icon={CalendarCheck} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
-          <StatCard label="Total Reservations" value={myReservations.length} icon={Package} color="#0f766e" bg="#f0fdfa" border="#99f6e4" />
-          <StatCard label="Notifications" value={unreadNotifs} icon={Bell} color="#d97706" bg="#fffbeb" border="#fde68a" />
-          <StatCard label="Emergency Requests" value={emergencyRequests.length} icon={AlertOctagon} color="#dc2626" bg="#fef2f2" border="#fecaca" />
+          <StatCard label={t('patient.activeHoldsCount')} value={activeRes.length} icon={CalendarCheck} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
+          <StatCard label={t('patient.myReservations')} value={myReservations.length} icon={Package} color="#0f766e" bg="#f0fdfa" border="#99f6e4" />
+          <StatCard label={t('navigation.notifications')} value={unreadNotifs} icon={Bell} color="#d97706" bg="#fffbeb" border="#fde68a" />
+          <StatCard label={t('navigation.emergencyRequests')} value={safeEmergencyRequests.length} icon={AlertOctagon} color="#dc2626" bg="#fef2f2" border="#fecaca" />
+        </div>
+
+        {/* Frequently Used Medicines Section */}
+        <div style={{
+          background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)',
+          borderRadius: 16,
+          padding: '20px 24px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+          marginBottom: 28,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Clock style={{ width: 15, height: 15, color: '#d97706' }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  {t('patient.frequentMedicines', { defaultValue: 'Frequently Used Medicines' })}
+                </h2>
+                <p style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0' }}>
+                  {t('patient.frequentMedicinesDesc', { defaultValue: 'Quick 1-click reorder and availability check' })}
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/patient/search"
+              style={{ fontSize: 12.5, color: '#1d4ed8', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {t('common.search', { defaultValue: 'Search all' })} <ArrowRight style={{ width: 13, height: 13 }} />
+            </Link>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
+            {userFrequentMedicines.length > 0 ? (
+              userFrequentMedicines.slice(0, 4).map((med, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: '#fff',
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{med.name}</span>
+                      {med.requiresPrescription && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', padding: '1px 6px', borderRadius: 4 }}>
+                          Rx
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                      Reserved {med.count} {med.count === 1 ? 'time' : 'times'}
+                    </p>
+                  </div>
+                  <Link
+                    to={`/patient/search?q=${encodeURIComponent(med.name)}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '7px 12px',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      border: '1px solid #bfdbfe',
+                    }}
+                  >
+                    <Search style={{ width: 12, height: 12 }} /> Quick Reserve
+                  </Link>
+                </div>
+              ))
+            ) : (
+              popularDefaults.map((med, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: '#fff',
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{med.name}</span>
+                      {med.rx && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', padding: '1px 6px', borderRadius: 4 }}>
+                          Rx
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                      {med.category} · Popular
+                    </p>
+                  </div>
+                  <Link
+                    to={`/patient/search?q=${encodeURIComponent(med.name.split(' ')[0])}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '7px 12px',
+                      background: '#f8fafc',
+                      color: '#334155',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      border: '1px solid #cbd5e1',
+                    }}
+                  >
+                    <Search style={{ width: 12, height: 12 }} /> Check Stock
+                  </Link>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Quick Actions */}
         <div style={{ marginBottom: 28 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>Quick Actions</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>{t('patient.quickActions')}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-            <QuickAction href="/patient/search" label="Find Medicine" desc="Search by name, type or category" icon={Search} color="#1d4ed8" bg="#eff6ff" />
-            <QuickAction href="/patient/image-search" label="Search by Image" desc="Identify medicine from a photo" icon={Activity} color="#7c3aed" bg="#f5f3ff" />
-            <QuickAction href="/patient/map" label="Live Map" desc="See pharmacies and hospitals near you" icon={Map} color="#0f766e" bg="#f0fdfa" />
-            <QuickAction href="/patient/nearby" label="Nearby Sources" desc="Find verified pharmacies & hospitals" icon={MapPin} color="#d97706" bg="#fffbeb" />
-            <QuickAction href="/patient/reservations" label="My Reservations" desc="Track and manage your holds" icon={CalendarCheck} color="#059669" bg="#f0fdf4" />
-            <QuickAction href="/patient/requests" label="Emergency Requests" desc="Create or track urgent requests" icon={AlertOctagon} color="#dc2626" bg="#fef2f2" />
+            <QuickAction href="/patient/search" label={t('navigation.findMedicine')} desc={t('patient.findMedicineDesc')} icon={Search} color="#1d4ed8" bg="#eff6ff" />
+            <QuickAction href="/patient/image-search" label={t('navigation.imageSearch')} desc={t('patient.photoSearchDesc')} icon={Activity} color="#7c3aed" bg="#f5f3ff" />
+            <QuickAction href="/patient/map" label={t('navigation.liveMap')} desc={t('patient.liveMapDesc')} icon={Map} color="#0f766e" bg="#f0fdfa" />
+            <QuickAction href="/patient/nearby" label={t('navigation.nearbySources')} desc={t('patient.nearbyPharmacies')} icon={MapPin} color="#d97706" bg="#fffbeb" />
+            <QuickAction href="/patient/reservations" label={t('navigation.myReservations')} desc={t('reservations.subtitle')} icon={CalendarCheck} color="#059669" bg="#f0fdf4" />
+            <QuickAction href="/patient/requests" label={t('navigation.emergencyRequests')} desc={t('emergencyQueue', { defaultValue: 'Emergency Requests' })} icon={AlertOctagon} color="#dc2626" bg="#fef2f2" />
           </div>
         </div>
 
@@ -118,9 +284,9 @@ export const PatientDashboard: React.FC = () => {
             border: '1px solid #e2e8f0', boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Recent Reservations</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{t('patient.recentReservations')}</h2>
               <Link to="/patient/reservations" style={{ fontSize: 12.5, color: '#1d4ed8', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                View all <ArrowRight style={{ width: 13, height: 13 }} />
+                {t('common.view')} {t('common.all')} <ArrowRight style={{ width: 13, height: 13 }} />
               </Link>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

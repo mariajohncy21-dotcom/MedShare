@@ -32,6 +32,7 @@ import {
   Activity,
   Zap,
   LayoutGrid,
+  FileText,
 } from 'lucide-react';
 import { MedMap } from '../components/map/MedMap';
 import { RouteModal } from '../components/map/RouteModal';
@@ -39,9 +40,11 @@ import { MedicineCard } from '../components/common/MedicineCard';
 import { MedicineImageScanner } from '../components/common/MedicineImageScanner';
 import { TISAIYANVILAI_LOCALITIES, DEMO_IMAGE_CATALOG, DEFAULT_CITY, DEFAULT_PINCODE } from '../data/mockData';
 import confetti from 'canvas-confetti';
+import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All Categories' },
+  { id: 'FREQUENT', label: '⭐ Frequent Medicines' },
   { id: 'ANTIVIRAL', label: 'Antiviral' },
   { id: 'EMERGENCY_CARDIAC', label: 'Cardiac Emergency' },
   { id: 'ANTICOAGULANT', label: 'Anticoagulant' },
@@ -52,7 +55,8 @@ const CATEGORIES = [
 ];
 
 export const FindMedicine: React.FC = () => {
-  const { medicines, sources, inventory, createReservation } = useApp();
+  const { currentUser, medicines, sources, inventory, createReservation } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -95,23 +99,32 @@ export const FindMedicine: React.FC = () => {
   // Route Navigation Modal
   const [routeSource, setRouteSource] = useState<MedicalSource | null>(null);
 
-  // Reservation Modal
+  // Reservation Modal & Doctor Prescription Upload
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlanToReserve, setSelectedPlanToReserve] = useState<AllocationPlan | null>(null);
   const [patientName, setPatientName] = useState('Rahul Sharma');
   const [patientPhone, setPatientPhone] = useState('+91 98765 43210');
   const [prescriptionAcknowledged, setPrescriptionAcknowledged] = useState(false);
+  const [prescriptionDoctorName, setPrescriptionDoctorName] = useState('');
+  const [prescriptionDate, setPrescriptionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [prescriptionFileUrl, setPrescriptionFileUrl] = useState<string | null>(null);
+  const [prescriptionFileName, setPrescriptionFileName] = useState<string | null>(null);
+  const [isUploadingPrescription, setIsUploadingPrescription] = useState(false);
 
   const currentMedicine = medicines.find(m => m.id === selectedMedicineId);
 
-  // Filtered medicines for autocomplete
+  // Filtered medicines for autocomplete & catalog
   const filteredCatalog = medicines.filter((m) => {
     const matchesQuery =
       !searchQuery ||
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.genericName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = selectedCategory === 'ALL' || m.category === selectedCategory;
+    let matchesCat = selectedCategory === 'ALL' || m.category === selectedCategory;
+    if (selectedCategory === 'FREQUENT') {
+      const frequentIds = ['MED-01', 'MED-03', 'MED-05', 'MED-06', 'MED-07', 'MED-001', 'MED-005'];
+      matchesCat = frequentIds.includes(m.id) || Boolean(m.prescriptionRequired);
+    }
     return matchesQuery && matchesCat;
   });
 
@@ -257,16 +270,67 @@ export const FindMedicine: React.FC = () => {
 
   const handleOpenReserveModal = (plan: AllocationPlan) => {
     setSelectedPlanToReserve(plan);
+    setPatientName(currentUser?.name || 'Rahul Sharma');
+    setPatientPhone(currentUser?.phone || '+91 98765 43210');
+    setPrescriptionAcknowledged(false);
+    setPrescriptionDoctorName('');
+    setPrescriptionDate(new Date().toISOString().slice(0, 10));
+    setPrescriptionFileUrl(null);
+    setPrescriptionFileName(null);
     setIsModalOpen(true);
+  };
+
+  const handlePrescriptionFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPrescription(true);
+    setPrescriptionFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPrescriptionFileUrl(reader.result as string);
+      setIsUploadingPrescription(false);
+    };
+    reader.onerror = () => {
+      setIsUploadingPrescription(false);
+      alert('Failed to read prescription file. Please try another image.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUseSamplePrescription = () => {
+    setPrescriptionDoctorName('Dr. S. K. Narayanan, MBBS, MD (Reg #TN-48291)');
+    setPrescriptionFileName('Government_Medical_College_Rx.jpg');
+    setPrescriptionFileUrl('https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=800&auto=format&fit=crop&q=80');
+    setPrescriptionAcknowledged(true);
   };
 
   const handleConfirmReservation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlanToReserve) return;
 
+    if (currentMedicine?.prescriptionRequired) {
+      if (!prescriptionDoctorName.trim()) {
+        alert('Please provide the prescribing doctor name and registration number.');
+        return;
+      }
+      if (!prescriptionFileUrl) {
+        alert('Please attach your doctor prescription document to continue.');
+        return;
+      }
+      if (!prescriptionAcknowledged) {
+        alert('Please confirm the prescription acknowledgement checkbox.');
+        return;
+      }
+    }
+
     createReservation(selectedPlanToReserve, {
       name: patientName,
       phone: patientPhone,
+      prescriptionRequired: Boolean(currentMedicine?.prescriptionRequired),
+      prescriptionFileUrl: prescriptionFileUrl || undefined,
+      prescriptionDoctorName: prescriptionDoctorName.trim() || undefined,
+      prescriptionDate: prescriptionDate || undefined,
+      isVerifiedUser: Boolean(currentUser?.phoneVerified ?? true),
     });
 
     setIsModalOpen(false);
@@ -305,10 +369,10 @@ export const FindMedicine: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Find Medicine & Pharmacy Stock
+            {t('findMedicine.title')}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-            Type any medicine name or search by photo to view live verified stock across licensed pharmacies & emergency hospitals in your regional network.
+            {t('findMedicine.subtitle')}
           </p>
         </div>
 
@@ -332,7 +396,7 @@ export const FindMedicine: React.FC = () => {
               }`}
             >
               <Search className="w-4 h-4" />
-              <span>Search by Medicine Name</span>
+              <span>{t('findMedicine.searchModeName')}</span>
             </button>
             <button
               type="button"
@@ -342,7 +406,7 @@ export const FindMedicine: React.FC = () => {
               }`}
             >
               <Camera className="w-4 h-4" />
-              <span>📷 Optical Medicine & Prescription Scanner</span>
+              <span>📷 {t('findMedicine.searchModeImage')}</span>
             </button>
             <button
               type="button"
@@ -718,9 +782,13 @@ export const FindMedicine: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  {source.emergencySupport24x7 && (
-                    <span className="absolute top-2.5 right-2.5 bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm">
-                      24x7
+                  {source.is24Hours ? (
+                    <span className="absolute top-2.5 right-2.5 bg-emerald-600 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 border border-emerald-400/50 backdrop-blur-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Full Day (24h)
+                    </span>
+                  ) : (
+                    <span className="absolute top-2.5 right-2.5 bg-amber-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 border border-amber-400/50 backdrop-blur-xs">
+                      <Clock className="w-2.5 h-2.5" /> 8 AM - 9 PM
                     </span>
                   )}
                   <div className="absolute bottom-2 left-3 right-3">
@@ -748,8 +816,8 @@ export const FindMedicine: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Distance & Address */}
-                  <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  {/* Distance & Address & Timings */}
+                  <div className="text-xs text-slate-600 space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                     <div className="flex items-center justify-between font-bold">
                       <span className="text-blue-700 flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5" /> {distance} km away
@@ -759,11 +827,14 @@ export const FindMedicine: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 truncate">{source.address}</p>
-                    <div className="flex items-center justify-between text-[11px] pt-1 text-slate-600 font-semibold border-t border-slate-200/60">
+                    <div className="flex items-center justify-between text-[11px] pt-1.5 text-slate-600 font-semibold border-t border-slate-200/60">
                       <span className="flex items-center gap-1">
                         <Phone className="w-3 h-3 text-slate-400" /> {source.phone}
                       </span>
-                      <span className="text-teal-700 font-bold">{source.operatingHours}</span>
+                      <span className={`font-black flex items-center gap-1 text-[10.5px] ${source.is24Hours ? 'text-emerald-700' : 'text-amber-800'}`}>
+                        <Clock className="w-3 h-3 flex-shrink-0" />
+                        {source.is24Hours ? 'Full Day (24 Hours)' : (source.operatingHours || '08:00 AM - 09:00 PM')}
+                      </span>
                     </div>
                   </div>
 
@@ -957,9 +1028,9 @@ export const FindMedicine: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="text-[10px] font-extrabold uppercase text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">
-                  15-Minute Guaranteed Hold
+                  {t('common.countdown')}
                 </span>
-                <h3 className="text-lg font-black text-slate-900 mt-1">Confirm Medicine Reservation</h3>
+                <h3 className="text-lg font-black text-slate-900 mt-1">{t('findMedicine.modalTitle')}</h3>
               </div>
               <button
                 type="button"
@@ -971,17 +1042,17 @@ export const FindMedicine: React.FC = () => {
             </div>
 
             {/* In-Person Collection Notice */}
-            <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl space-y-1.5 text-xs text-blue-950">
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl space-y-2 text-xs">
               <div className="flex items-center justify-between font-bold">
-                <span>Medicine:</span>
-                <span className="text-slate-900">{selectedPlanToReserve.medicineName}</span>
+                <span>{t('findMedicine.modalTitle')}:</span>
+                <span className="text-blue-900">{selectedPlanToReserve.medicineName}</span>
               </div>
               <div className="flex items-center justify-between font-bold">
-                <span>Reserved Quantity:</span>
-                <span className="text-emerald-700">{selectedPlanToReserve.fulfilledQuantity} units</span>
+                <span>{t('findMedicine.quantityLabel')}:</span>
+                <span className="text-emerald-700">{selectedPlanToReserve.fulfilledQuantity} {t('common.units')}</span>
               </div>
               <div className="flex items-center justify-between font-bold">
-                <span>Hold Duration:</span>
+                <span>{t('common.countdown')}:</span>
                 <span className="text-blue-700">15 Minutes from Confirmation</span>
               </div>
               <p className="text-[11px] text-blue-800 font-semibold pt-1 border-t border-blue-200/60">
@@ -989,20 +1060,108 @@ export const FindMedicine: React.FC = () => {
               </p>
             </div>
 
-            {/* Prescription Required Warning & Mandatory Checkbox */}
+            {/* Prescription Required Warning & Mandatory Document Upload */}
             {(currentMedicine?.prescriptionRequired || selectedPlanToReserve.allocatedSources.some(s => s.isVerified)) && (
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-xs">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+              <div className="p-4 bg-amber-50/90 border-2 border-amber-300/80 rounded-2xl space-y-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-amber-200 text-amber-900 flex-shrink-0 mt-0.5">
+                    <FileText className="w-4 h-4" />
+                  </div>
                   <div>
-                    <span className="font-extrabold text-amber-900">Prescription Required for Collection</span>
-                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                      Please bring your valid prescription when collecting the medicine. The pharmacy may refuse dispensing if a valid prescription is required and not provided.
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-amber-950 text-sm">
+                        Doctor Prescription Mandatory (Rx)
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                        Safety Locked
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-amber-900 mt-1 leading-relaxed">
+                      To safeguard public health and prevent improper or unauthorized consumption, this critical medication strictly requires an authenticated doctor's prescription before dispensing.
                     </p>
                   </div>
                 </div>
 
-                <label className="flex items-start gap-2.5 pt-2 border-t border-amber-200/70 cursor-pointer select-none">
+                {/* Prescription Details Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/80">
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-amber-950 mb-1">
+                      Prescribing Doctor Name & Reg No. <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required={Boolean(currentMedicine?.prescriptionRequired)}
+                      placeholder="e.g. Dr. K. Ramesh, MD (Reg #TN-48291)"
+                      value={prescriptionDoctorName}
+                      onChange={(e) => setPrescriptionDoctorName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-amber-950 mb-1">
+                      Prescription Issue Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required={Boolean(currentMedicine?.prescriptionRequired)}
+                      value={prescriptionDate}
+                      onChange={(e) => setPrescriptionDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Document Attachment / Upload Area */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold text-amber-950">
+                      Upload Prescription Document (Photo / PDF) <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleUseSamplePrescription}
+                      className="text-[10.5px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                    >
+                      Use Sample Doctor Rx (Demo)
+                    </button>
+                  </div>
+
+                  {prescriptionFileUrl ? (
+                    <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-xs font-bold text-emerald-900 truncate max-w-[200px]">
+                          {prescriptionFileName || 'Prescription_Document_Attached.jpg'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setPrescriptionFileUrl(null); setPrescriptionFileName(null); }}
+                        className="text-[11px] font-bold text-red-600 hover:text-red-800 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-amber-300 rounded-xl bg-amber-50 hover:bg-white transition-colors cursor-pointer text-center">
+                      <Upload className="w-5 h-5 text-amber-700 mb-1" />
+                      <span className="text-xs font-bold text-amber-900">
+                        {isUploadingPrescription ? 'Reading document...' : 'Click to Upload Doctor Prescription'}
+                      </span>
+                      <span className="text-[10px] text-amber-700">PNG, JPG, or PDF (Max 10MB)</span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handlePrescriptionFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Mandatory Checkbox */}
+                <label className="flex items-start gap-2.5 pt-2 border-t border-amber-200/80 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     required
@@ -1010,8 +1169,8 @@ export const FindMedicine: React.FC = () => {
                     onChange={(e) => setPrescriptionAcknowledged(e.target.checked)}
                     className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 mt-0.5 cursor-pointer"
                   />
-                  <span className="text-xs font-bold text-amber-950">
-                    I understand that a valid prescription may be required at physical collection.
+                  <span className="text-[11.5px] font-bold text-amber-950 leading-snug">
+                    I verify that this prescription is authentic, current, and issued by a registered medical practitioner for this patient. I will present the original prescription upon collection.
                   </span>
                 </label>
               </div>
@@ -1019,7 +1178,7 @@ export const FindMedicine: React.FC = () => {
 
             <form onSubmit={handleConfirmReservation} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Patient / Collector Full Name</label>
+                <label className="block text-xs font-bold text-slate-700">{t('findMedicine.patientNameLabel')}</label>
                 <input
                   type="text"
                   required
@@ -1030,7 +1189,14 @@ export const FindMedicine: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Contact Phone Number</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">{t('findMedicine.patientPhoneLabel')}</label>
+                  {currentUser?.phoneVerified && (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      ✓ Verified Mobile User
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
@@ -1046,18 +1212,22 @@ export const FindMedicine: React.FC = () => {
                   onClick={() => setIsModalOpen(false)}
                   className="w-1/2 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
-                  disabled={currentMedicine?.prescriptionRequired && !prescriptionAcknowledged}
+                  disabled={Boolean(
+                    currentMedicine?.prescriptionRequired &&
+                      (!prescriptionAcknowledged || !prescriptionDoctorName.trim() || !prescriptionFileUrl)
+                  )}
                   className={`w-1/2 py-3 rounded-2xl font-extrabold text-xs shadow-lg transition-all cursor-pointer ${
-                    (currentMedicine?.prescriptionRequired && !prescriptionAcknowledged)
+                    currentMedicine?.prescriptionRequired &&
+                    (!prescriptionAcknowledged || !prescriptionDoctorName.trim() || !prescriptionFileUrl)
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                       : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25'
                   }`}
                 >
-                  Generate QR Token & Hold
+                  {t('findMedicine.confirmReservationBtn')}
                 </button>
               </div>
             </form>
@@ -1084,7 +1254,24 @@ export const FindMedicine: React.FC = () => {
               <p><strong>Owner / Licensee:</strong> {detailsSource.source.ownerName}</p>
               <p><strong>Address:</strong> {detailsSource.source.address}</p>
               <p><strong>Phone:</strong> {detailsSource.source.phone}</p>
-              <p><strong>Operating Hours:</strong> {detailsSource.source.operatingHours}</p>
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    Operating Timings:
+                  </span>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    detailsSource.source.is24Hours
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {detailsSource.source.is24Hours ? '🟢 24 Hours Open (Full Day)' : '🕒 8:00 AM - 9:00 PM'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium">
+                  Opens: <strong>{detailsSource.source.openingTime || '08:00 AM'}</strong> • Closes: <strong>{detailsSource.source.closingTime || '09:00 PM'}</strong>
+                </p>
+              </div>
               <p><strong>Available Units in Stock:</strong> <span className="font-bold text-emerald-700">{detailsSource.availableQty} units</span></p>
             </div>
             <button

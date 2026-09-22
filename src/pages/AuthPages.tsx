@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import { UserRole } from '../types';
+import { LanguageSwitcher } from '../components/common/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 import {
   HeartPulse,
   User,
@@ -44,6 +46,9 @@ const AuthLayout: React.FC<{ children: React.ReactNode; maxWidth?: number }> = (
       boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
       overflow: 'hidden',
     }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+        <LanguageSwitcher />
+      </div>
       {children}
     </div>
   </div>
@@ -186,6 +191,7 @@ const SubmitBtn: React.FC<{ disabled?: boolean; loading?: boolean; label: string
 // =============================================================================
 export const LoginPage: React.FC = () => {
   const { login } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -198,7 +204,7 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
     if (!email.trim() || !password) {
-      setErrorMessage('Please enter both your email address and password.');
+      setErrorMessage(t('auth.errors.fillAllFields'));
       return;
     }
     setIsLoading(true);
@@ -206,7 +212,8 @@ export const LoginPage: React.FC = () => {
       const res = await login(email.trim(), password);
       setIsLoading(false);
       if (res.success && res.user) {
-        switch (res.user.role) {
+        const userRole = (res.user.role || 'PATIENT').toUpperCase();
+        switch (userRole) {
           case 'PATIENT': navigate('/', { replace: true }); break;
           case 'PHARMACY': navigate('/pharmacy/dashboard', { replace: true }); break;
           case 'HOSPITAL': navigate('/hospital/dashboard', { replace: true }); break;
@@ -214,11 +221,11 @@ export const LoginPage: React.FC = () => {
           default: navigate('/', { replace: true });
         }
       } else {
-        setErrorMessage(res.error || 'Invalid credentials. Please verify your email and password.');
+        setErrorMessage(res.error || t('auth.errors.invalidCredentials'));
       }
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err.message || 'Login failed. Please check your network connection.');
+      setErrorMessage(err.message || t('auth.errors.invalidCredentials'));
     }
   };
 
@@ -234,10 +241,10 @@ export const LoginPage: React.FC = () => {
         <BrandMark />
         <div>
           <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            Sign in to MedShare
+            {t('auth.title')}
           </h2>
           <p style={{ fontSize: 12.5, color: '#64748b', margin: 0, fontWeight: 400 }}>
-            Secure access for citizens, pharmacies, hospitals &amp; admins.
+            {t('auth.subtitle')}
           </p>
         </div>
       </div>
@@ -247,12 +254,12 @@ export const LoginPage: React.FC = () => {
         {errorMessage && <div style={{ marginBottom: 18 }}><ErrorBanner message={errorMessage} /></div>}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <FieldWrapper label="Email Address">
+          <FieldWrapper label={t('auth.emailLabel')}>
             <div style={{ position: 'relative' }}>
               <Mail style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#94a3b8' }} />
               <StyledInput
                 type="email" required autoComplete="email"
-                placeholder="name@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{ paddingLeft: 38 }}
@@ -260,11 +267,11 @@ export const LoginPage: React.FC = () => {
             </div>
           </FieldWrapper>
 
-          <FieldWrapper label="Password">
+          <FieldWrapper label={t('auth.passwordLabel')}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Password</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{t('auth.passwordLabel')}</label>
               <Link to="/auth/forgot" style={{ fontSize: 11.5, fontWeight: 700, color: '#1d4ed8', textDecoration: 'none' }}>
-                Forgot Password?
+                {t('auth.forgotPassword')}
               </Link>
             </div>
             <div style={{ position: 'relative' }}>
@@ -291,14 +298,13 @@ export const LoginPage: React.FC = () => {
           </FieldWrapper>
 
           <div style={{ marginTop: 4 }}>
-            <SubmitBtn label="Sign In" loadingLabel="Signing in…" loading={isLoading} />
+            <SubmitBtn label={t('auth.signInBtn')} loadingLabel={t('auth.signingIn')} loading={isLoading} />
           </div>
         </form>
 
         <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
-          Don't have an account?{' '}
           <Link to="/register" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>
-            Register for MedShare
+            {t('auth.registerTab')}
           </Link>
         </div>
       </div>
@@ -311,10 +317,15 @@ export const LoginPage: React.FC = () => {
 // =============================================================================
 export const RegisterPage: React.FC = () => {
   const { register } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [patientStep, setPatientStep] = useState<1 | 2>(1);
+  const [otpCode, setOtpCode] = useState('');
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccessSubmitted, setIsSuccessSubmitted] = useState(false);
@@ -424,7 +435,10 @@ export const RegisterPage: React.FC = () => {
         hospitalType: selectedRole === 'HOSPITAL' ? facilityData.hospitalType : undefined,
         openingTime: facilityData.openingTime,
         closingTime: facilityData.closingTime,
-        operatingHours: `${facilityData.openingTime} - ${facilityData.closingTime}`,
+        operatingHours: (facilityData.openingTime === '12:00 AM' && facilityData.closingTime === '11:59 PM') || facilityData.emergencySupport24x7
+          ? '24 Hours Open (Full Day)'
+          : `${facilityData.openingTime} - ${facilityData.closingTime}`,
+        is24Hours: (facilityData.openingTime === '12:00 AM' && facilityData.closingTime === '11:59 PM') || facilityData.emergencySupport24x7,
         address: fullAddress, doorNumber: facilityData.doorNumber, street: facilityData.street,
         area: facilityData.area, city: facilityData.city, district: facilityData.district,
         state: facilityData.state, pincode: facilityData.pincode,
@@ -507,27 +521,27 @@ export const RegisterPage: React.FC = () => {
     const roles = [
       {
         role: 'PATIENT' as UserRole,
-        icon: User, label: 'User',
+        icon: User, label: t('auth.roles.patient'),
         badge: 'Public',
-        desc: 'Search medicines, check local availability, and create 15-min QR holds (for residents & visitors).',
+        desc: t('auth.roleDescriptions.patient'),
         color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe',
-        cta: 'Register as User',
+        cta: t('auth.registerBtn'),
       },
       {
         role: 'PHARMACY' as UserRole,
-        icon: Building2, label: 'Pharmacy',
+        icon: Building2, label: t('auth.roles.pharmacy'),
         badge: 'Requires @pharm.com',
-        desc: 'Manage inventory, batches, and fulfill hospital emergency medicine requests.',
+        desc: t('auth.roleDescriptions.pharmacy'),
         color: '#0d9488', bg: '#f0fdfa', border: '#99f6e4',
-        cta: 'Register Pharmacy',
+        cta: t('auth.registerBtn'),
       },
       {
         role: 'HOSPITAL' as UserRole,
-        icon: Hospital, label: 'Hospital',
+        icon: Hospital, label: t('auth.roles.hospital'),
         badge: 'Requires @hos.com',
-        desc: 'Multi-speciality trauma hub — submit ICU emergency requisitions and smart allocation requests.',
+        desc: t('auth.roleDescriptions.hospital'),
         color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe',
-        cta: 'Register Hospital',
+        cta: t('auth.registerBtn'),
       },
     ];
 
@@ -538,9 +552,9 @@ export const RegisterPage: React.FC = () => {
           <BrandMark />
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-              Create your MedShare Account
+              {t('auth.registerBtn')}
             </h2>
-            <p style={{ fontSize: 12.5, color: '#64748b', margin: 0 }}>Choose your account type to begin.</p>
+            <p style={{ fontSize: 12.5, color: '#64748b', margin: 0 }}>{t('auth.roleLabel')}</p>
           </div>
         </div>
 
@@ -590,8 +604,8 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
-            Already registered?{' '}
-            <Link to="/auth/login" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>Sign In</Link>
+            {t('auth.alreadyHaveAccount')}{' '}
+            <Link to="/auth/login" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>{t('auth.signInTab')}</Link>
           </div>
         </div>
       </AuthLayout>
@@ -600,11 +614,6 @@ export const RegisterPage: React.FC = () => {
 
   // ─── SCREEN 1: User (Patient) Registration with Mobile OTP ─────────────────
   if (selectedRole === 'PATIENT') {
-    const [patientStep, setPatientStep] = useState<1 | 2>(1);
-    const [otpCode, setOtpCode] = useState('');
-    const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
-    const [otpMessage, setOtpMessage] = useState<string | null>(null);
-
     const handlePatientStep1Next = async (e: React.FormEvent) => {
       e.preventDefault();
       setErrorMessage(null);
@@ -649,7 +658,8 @@ export const RegisterPage: React.FC = () => {
           address: patientData.address, city: patientData.city,
           district: patientData.district, state: patientData.state,
           pincode: patientData.pincode, latitude: patientData.latitude, longitude: patientData.longitude,
-          mobileVerified: true, accountStatus: 'ACTIVE',
+          phoneVerified: true, mobileVerified: true, accountStatus: 'ACTIVE',
+          otp: otpCode,
         });
         setIsLoading(false);
         if (res.success) navigate('/patient/dashboard');
@@ -765,6 +775,23 @@ export const RegisterPage: React.FC = () => {
                   </p>
                 </div>
               </div>
+
+              {devOtpHint && (
+                <div style={{
+                  fontSize: 12, fontWeight: 700, color: '#1e40af', background: '#dbeafe',
+                  border: '1px solid #bfdbfe', padding: '8px 12px', borderRadius: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                }}>
+                  <span>Demo SMS OTP Code: <strong>{devOtpHint}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setOtpCode(devOtpHint)}
+                    style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Auto-Fill
+                  </button>
+                </div>
+              )}
 
               {otpMessage && (
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#059669', background: '#ecfdf5', padding: '8px 12px', borderRadius: 8 }}>
@@ -977,13 +1004,55 @@ export const RegisterPage: React.FC = () => {
                 onChange={e => setFacilityData({ ...facilityData, city: e.target.value })} />
             </FieldWrapper>
 
+            <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: 12, borderRadius: 10, border: '1.5px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>Operating Hours Presets:</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityData({
+                      ...facilityData,
+                      openingTime: '12:00 AM',
+                      closingTime: '11:59 PM',
+                      emergencySupport24x7: true,
+                    })}
+                    style={{
+                      padding: '4px 9px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                      background: (facilityData.openingTime === '12:00 AM' && facilityData.closingTime === '11:59 PM') ? '#065f46' : '#ecfdf5',
+                      color: (facilityData.openingTime === '12:00 AM' && facilityData.closingTime === '11:59 PM') ? '#fff' : '#047857',
+                      border: '1px solid #a7f3d0', cursor: 'pointer',
+                    }}
+                  >
+                    🟢 24 Hours Open (Full Day)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacilityData({
+                      ...facilityData,
+                      openingTime: '08:00 AM',
+                      closingTime: '09:00 PM',
+                      emergencySupport24x7: false,
+                    })}
+                    style={{
+                      padding: '4px 9px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                      background: (facilityData.openingTime === '08:00 AM' && facilityData.closingTime === '09:00 PM') ? '#92400e' : '#fffbeb',
+                      color: (facilityData.openingTime === '08:00 AM' && facilityData.closingTime === '09:00 PM') ? '#fff' : '#b45309',
+                      border: '1px solid #fde68a', cursor: 'pointer',
+                    }}
+                  >
+                    🕒 08:00 AM - 09:00 PM
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <FieldWrapper label="Opening Time">
               <StyledInput type="text" required placeholder="e.g. 08:00 AM" value={facilityData.openingTime}
                 onChange={e => setFacilityData({ ...facilityData, openingTime: e.target.value })} />
             </FieldWrapper>
 
             <FieldWrapper label="Closing Time">
-              <StyledInput type="text" required placeholder="e.g. 10:00 PM" value={facilityData.closingTime}
+              <StyledInput type="text" required placeholder="e.g. 09:00 PM" value={facilityData.closingTime}
                 onChange={e => setFacilityData({ ...facilityData, closingTime: e.target.value })} />
             </FieldWrapper>
 
@@ -1036,6 +1105,7 @@ export const RegisterPage: React.FC = () => {
 // 3. FORGOT PASSWORD PAGE
 // =============================================================================
 export const ForgotPasswordPage: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -1050,10 +1120,10 @@ export const ForgotPasswordPage: React.FC = () => {
         <BrandMark />
         <div>
           <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            Reset Password
+            {t('auth.forgotPasswordTitle')}
           </h2>
           <p style={{ fontSize: 12.5, color: '#64748b', margin: 0 }}>
-            Enter your registered email and we'll send a reset link.
+            {t('auth.forgotPasswordSubtitle')}
           </p>
         </div>
       </div>
@@ -1066,30 +1136,30 @@ export const ForgotPasswordPage: React.FC = () => {
           }}>
             <CheckCircle2 style={{ width: 36, height: 36, color: '#059669' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: '#065f46', margin: 0 }}>
-              Reset instructions dispatched to <strong>{email}</strong>.
+              {t('auth.resetLinkSent')} (<strong>{email}</strong>)
             </p>
             <Link to="/auth/login" style={{ fontSize: 12.5, fontWeight: 800, color: '#1d4ed8', textDecoration: 'none' }}>
-              Return to Login
+              {t('auth.backToSignIn')}
             </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <FieldWrapper label="Registered Email Address">
+            <FieldWrapper label={t('auth.emailLabel')}>
               <div style={{ position: 'relative' }}>
                 <Mail style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#94a3b8' }} />
-                <StyledInput type="email" required placeholder="name@example.com"
+                <StyledInput type="email" required placeholder={t('auth.emailPlaceholder')}
                   value={email} onChange={e => setEmail(e.target.value)}
                   style={{ paddingLeft: 38 }} />
               </div>
             </FieldWrapper>
-            <SubmitBtn label="Send Reset Link" />
+            <SubmitBtn label={t('auth.sendResetLink')} />
           </form>
         )}
 
         {!isSubmitted && (
           <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
-            Remember your password?{' '}
-            <Link to="/auth/login" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>Sign In</Link>
+            {t('auth.alreadyHaveAccount')}{' '}
+            <Link to="/auth/login" style={{ color: '#1d4ed8', fontWeight: 800, textDecoration: 'none' }}>{t('auth.signInTab')}</Link>
           </div>
         )}
       </div>

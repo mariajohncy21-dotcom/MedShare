@@ -19,9 +19,12 @@ import {
   LogIn,
   UserPlus,
 } from 'lucide-react';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 export const Navbar: React.FC = () => {
   const { currentUser, logout, isAuthenticated } = useApp();
+  const { t } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -61,11 +64,11 @@ export const Navbar: React.FC = () => {
 
   const getDashboardLabel = () => {
     switch (currentUser?.role) {
-      case 'PATIENT': return 'Patient Console';
-      case 'PHARMACY': return 'Pharmacy Console';
-      case 'HOSPITAL': return 'Hospital Console';
-      case 'ADMIN': return 'Admin Console';
-      default: return 'Console';
+      case 'PATIENT': return t('nav.patientPortal');
+      case 'PHARMACY': return t('nav.pharmacyPortal');
+      case 'HOSPITAL': return t('nav.hospitalPortal');
+      case 'ADMIN': return t('nav.adminPortal');
+      default: return t('nav.portal');
     }
   };
 
@@ -88,10 +91,10 @@ export const Navbar: React.FC = () => {
 
   // Navigation Links explicitly requested: Home, Find Medicine, Live Map, Emergency
   const primaryLinks = [
-    { name: 'Home', href: '/', icon: HeartPulse },
-    { name: 'Find Medicine', href: '/search', icon: Search },
-    { name: 'Live Map', href: '/map', icon: MapPin },
-    { name: 'Emergency', href: '/emergency', icon: AlertOctagon, isEmergency: true },
+    { name: t('nav.reservations'), href: '/reservations', icon: CalendarCheck },
+    { name: t('nav.findMedicine'), href: '/search', icon: Search },
+    { name: t('nav.liveMap'), href: '/map', icon: MapPin },
+    { name: t('nav.emergency'), href: '/emergency', icon: AlertOctagon, isEmergency: true },
   ];
 
   return (
@@ -247,6 +250,9 @@ export const Navbar: React.FC = () => {
                 );
               })}
 
+              {/* Language Switcher */}
+              <LanguageSwitcher />
+
               {isGuest ? (
                 <>
                   {/* Sign In Button */}
@@ -271,7 +277,7 @@ export const Navbar: React.FC = () => {
                     }}
                   >
                     <LogIn style={{ width: 14, height: 14 }} />
-                    <span>Sign In</span>
+                    <span>{t('nav.signIn')}</span>
                   </Link>
 
                   {/* Register Button */}
@@ -296,7 +302,7 @@ export const Navbar: React.FC = () => {
                     }}
                   >
                     <UserPlus style={{ width: 14, height: 14, color: '#64748b' }} />
-                    <span>Register</span>
+                    <span>{t('nav.register')}</span>
                   </Link>
                 </>
               ) : (
@@ -510,14 +516,14 @@ export const Navbar: React.FC = () => {
                         {[
                           {
                             icon: UserCircle,
-                            label: 'Manage Profile',
+                            label: t('navigation.profile'),
                             action: () => {
                               setProfileDropdownOpen(false);
                               setIsProfileModalOpen(true);
                             },
                           },
-                          { icon: Settings, label: 'Settings', href: '/settings' },
-                          { icon: CalendarCheck, label: 'My Active Holds', href: '/reservations' },
+                          { icon: Settings, label: t('navigation.settings'), href: '/settings' },
+                          { icon: CalendarCheck, label: t('navigation.myReservations'), href: '/reservations' },
                         ].map((item, i) =>
                           item.href ? (
                             <Link
@@ -597,7 +603,7 @@ export const Navbar: React.FC = () => {
                           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
                         >
                           <LogOut style={{ width: 15, height: 15, color: '#dc2626' }} />
-                          <span>Sign Out</span>
+                          <span>{t('nav.signOut')}</span>
                         </button>
                       </div>
                     )}
@@ -638,6 +644,10 @@ export const Navbar: React.FC = () => {
               padding: '12px 16px 20px',
             }}
           >
+            {/* Language Switcher on mobile */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+              <LanguageSwitcher />
+            </div>
             {/* User Info or Auth Callout */}
             {isGuest ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
@@ -653,7 +663,7 @@ export const Navbar: React.FC = () => {
                     }}
                   >
                     <LogIn style={{ width: 15, height: 15 }} />
-                    Sign In
+                    {t('nav.signIn')}
                   </Link>
                   <Link
                     to="/register"
@@ -666,7 +676,7 @@ export const Navbar: React.FC = () => {
                     }}
                   >
                     <UserPlus style={{ width: 15, height: 15 }} />
-                    Register
+                    {t('nav.register')}
                   </Link>
                 </div>
               </div>
@@ -711,6 +721,7 @@ export const Navbar: React.FC = () => {
                         fontWeight: 700,
                         margin: 0,
                         textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
                       }}
                     >
                       {getRoleLabel()}
@@ -730,7 +741,7 @@ export const Navbar: React.FC = () => {
                     textDecoration: 'none',
                   }}
                 >
-                  Console
+                  {t('nav.portal')}
                 </Link>
               </div>
             )}

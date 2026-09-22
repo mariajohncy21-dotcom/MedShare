@@ -47,7 +47,15 @@ export const AdminShortagesPage: React.FC = () => {
   }, [medicines, inventory]);
 
   const handleBroadcast = (medId: string) => {
-    broadcastShortageAlert(medId, broadcastNote || 'Urgent cluster inventory shortfall. Please update stock or offer surplus redistribution.');
+    const med = medicines.find(m => m.id === medId);
+    broadcastShortageAlert(
+      med?.name || medId,
+      'CRITICAL_LOW',
+      0,
+      10,
+      'ALL',
+      broadcastNote || 'Urgent cluster inventory shortfall. Please update stock or offer surplus redistribution.'
+    );
     setBroadcastSuccess(`Emergency broadcast alert sent to all 15 Tisaiyanvilai network nodes!`);
     setBroadcastMedicineId(null);
     setBroadcastNote('');

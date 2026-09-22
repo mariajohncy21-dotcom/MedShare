@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { Medicine, MedicalSource } from '../types';
 import {
@@ -28,7 +29,10 @@ import { calculateDistanceKm } from '../services/smartAllocation';
 
 export const Home: React.FC = () => {
   const { currentUser, isAuthenticated, medicines, sources, inventory, reservations } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const userRole = (currentUser?.role || 'PATIENT').toUpperCase();
 
   // Require login as PATIENT; redirect unauthenticated to /login, and facilities/admin to their consoles
   useEffect(() => {
@@ -36,14 +40,14 @@ export const Home: React.FC = () => {
       navigate('/login', { replace: true });
       return;
     }
-    if (currentUser.role === 'PHARMACY') {
+    if (userRole === 'PHARMACY') {
       navigate('/pharmacy/dashboard', { replace: true });
-    } else if (currentUser.role === 'HOSPITAL') {
+    } else if (userRole === 'HOSPITAL') {
       navigate('/hospital/dashboard', { replace: true });
-    } else if (currentUser.role === 'ADMIN') {
+    } else if (userRole === 'ADMIN') {
       navigate('/admin/dashboard', { replace: true });
     }
-  }, [currentUser, isAuthenticated, navigate]);
+  }, [currentUser, isAuthenticated, navigate, userRole]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -53,19 +57,26 @@ export const Home: React.FC = () => {
     availableQty: number;
   } | null>(null);
 
-  if (isAuthenticated && currentUser && currentUser.id !== 'guest' && currentUser.role !== 'PATIENT') {
-    return null;
+  if (isAuthenticated && currentUser && currentUser.id !== 'guest' && ['PHARMACY', 'HOSPITAL', 'ADMIN'].includes(userRole)) {
+    return (
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#f8fafc' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 36, height: 36, border: '3.5px solid #1d4ed8', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 14px' }} />
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#475569', margin: 0 }}>Navigating to Console Dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   const categories = [
-    { id: 'ALL', label: 'All Medicines' },
-    { id: 'ANALGESIC_ANTIPYRETIC', label: 'Pain & Fever' },
-    { id: 'ANTIBIOTIC', label: 'Antibiotics' },
-    { id: 'EMERGENCY_CARDIAC', label: 'Cardiac Care' },
-    { id: 'ANTIVIRAL', label: 'Antiviral' },
-    { id: 'DIABETIC_CRITICAL', label: 'Diabetic Care' },
-    { id: 'RESPIRATORY_EMERGENCY', label: 'Respiratory' },
-    { id: 'ANTICOAGULANT', label: 'Anticoagulant' },
+    { id: 'ALL', label: t('home.allMedicines') },
+    { id: 'ANALGESIC_ANTIPYRETIC', label: t('home.painFever') },
+    { id: 'ANTIBIOTIC', label: t('home.antibiotics') },
+    { id: 'EMERGENCY_CARDIAC', label: t('home.cardiacCare') },
+    { id: 'ANTIVIRAL', label: t('home.antiviral') },
+    { id: 'DIABETIC_CRITICAL', label: t('home.diabeticCare') },
+    { id: 'RESPIRATORY_EMERGENCY', label: t('home.respiratory') },
+    { id: 'ANTICOAGULANT', label: t('home.anticoagulant') },
   ];
 
   const filteredMedicines = medicines.filter((m) => {
@@ -83,10 +94,10 @@ export const Home: React.FC = () => {
   const activeReservations = reservations.filter((r) => r.status === 'CONFIRMED' || r.status === 'PENDING');
 
   const stats = [
-    { label: 'Verified Facilities', value: activeSources.length, color: '#1d4ed8', icon: Building2 },
-    { label: 'Medicine Types', value: medicines.length, color: '#0d9488', icon: Sparkles },
-    { label: 'Live Inventory Lines', value: inventory.length, color: '#7c3aed', icon: Activity },
-    { label: 'Active Holds', value: activeReservations.length, color: '#d97706', icon: Clock },
+    { label: t('home.verifiedFacilities'), value: activeSources.length, color: '#1d4ed8', icon: Building2 },
+    { label: t('home.medicineTypes'), value: medicines.length, color: '#0d9488', icon: Sparkles },
+    { label: t('home.liveInventoryLines'), value: inventory.length, color: '#7c3aed', icon: Activity },
+    { label: t('home.activeHolds'), value: activeReservations.length, color: '#d97706', icon: Clock },
   ];
 
   const capabilities = [
@@ -213,7 +224,7 @@ export const Home: React.FC = () => {
                   }}
                 >
                   <Search style={{ width: 16, height: 16 }} />
-                  Find Available Medicine
+                  {t('nav.findMedicine')}
                   <ArrowRight style={{ width: 14, height: 14 }} />
                 </Link>
 
@@ -232,7 +243,7 @@ export const Home: React.FC = () => {
                   }}
                 >
                   <Camera style={{ width: 16, height: 16 }} />
-                  📷 Scan Medicine / Prescription
+                  📷 {t('home.imageSearchButton')}
                 </a>
 
                 <Link
@@ -250,7 +261,7 @@ export const Home: React.FC = () => {
                   }}
                 >
                   <AlertOctagon style={{ width: 16, height: 16 }} />
-                  Broadcast Emergency
+                  {t('nav.emergency')}
                 </Link>
               </div>
             </div>

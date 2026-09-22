@@ -10,77 +10,79 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { NotificationDropdown } from './NotificationDropdown';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
-// ─── Sidebar nav definitions by role ──────────────────────────────────────────
-const NAV_ITEMS: Record<UserRole, { label: string; href: string; icon: React.ElementType; badge?: string }[]> = {
+// ─── Sidebar nav definitions by role (Dynamic i18n) ───────────────────────────
+const getNavItems = (t: (key: string) => string): Record<UserRole, { label: string; href: string; icon: React.ElementType; badge?: string }[]> => ({
   PATIENT: [
-    { label: 'Dashboard', href: '/patient/dashboard', icon: LayoutDashboard },
-    { label: 'Find Medicine', href: '/patient/search', icon: Search },
-    { label: 'Search by Image', href: '/patient/image-search', icon: Activity },
-    { label: 'Nearby Sources', href: '/patient/nearby', icon: Building2 },
-    { label: 'Live Map', href: '/patient/map', icon: Map },
-    { label: 'My Reservations', href: '/patient/reservations', icon: CalendarCheck },
-    { label: 'My Requests', href: '/patient/requests', icon: ClipboardList },
-    { label: 'Notifications', href: '/patient/notifications', icon: Bell },
-    { label: 'Profile', href: '/patient/profile', icon: User },
-    { label: 'Settings', href: '/patient/settings', icon: Settings },
+    { label: t('navigation.dashboard'), href: '/patient/dashboard', icon: LayoutDashboard },
+    { label: t('navigation.findMedicine'), href: '/patient/search', icon: Search },
+    { label: t('navigation.imageSearch'), href: '/patient/image-search', icon: Activity },
+    { label: t('navigation.nearbySources'), href: '/patient/nearby', icon: Building2 },
+    { label: t('navigation.liveMap'), href: '/patient/map', icon: Map },
+    { label: t('navigation.myReservations'), href: '/patient/reservations', icon: CalendarCheck },
+    { label: t('navigation.myRequests'), href: '/patient/requests', icon: ClipboardList },
+    { label: t('navigation.notifications'), href: '/patient/notifications', icon: Bell },
+    { label: t('navigation.profile'), href: '/patient/profile', icon: User },
+    { label: t('navigation.settings'), href: '/patient/settings', icon: Settings },
   ],
   PHARMACY: [
-    { label: 'Dashboard', href: '/pharmacy/dashboard', icon: LayoutDashboard },
-    { label: 'Inventory', href: '/pharmacy/inventory', icon: Package },
-    { label: 'Add Medicine', href: '/pharmacy/inventory/add', icon: Plus },
-    { label: 'Update Stock', href: '/pharmacy/inventory/update', icon: RefreshCw },
-    { label: 'Bulk Upload', href: '/pharmacy/inventory/bulk-upload', icon: Upload },
-    { label: 'Stock History', href: '/pharmacy/inventory/history', icon: FileText },
-    { label: 'Emergency Requests', href: '/pharmacy/emergency-requests', icon: AlertOctagon, badge: 'REQUESTS' },
-    { label: 'Reservations', href: '/pharmacy/reservations', icon: CalendarCheck },
-    { label: 'Daily Reports', href: '/pharmacy/daily-reports', icon: ClipboardList },
-    { label: 'Notifications', href: '/pharmacy/notifications', icon: Bell },
-    { label: 'Pharmacy Profile', href: '/pharmacy/profile', icon: Building2 },
-    { label: 'Settings', href: '/pharmacy/settings', icon: Settings },
+    { label: t('navigation.dashboard'), href: '/pharmacy/dashboard', icon: LayoutDashboard },
+    { label: t('navigation.inventory'), href: '/pharmacy/inventory', icon: Package },
+    { label: t('navigation.addMedicine'), href: '/pharmacy/inventory/add', icon: Plus },
+    { label: t('navigation.updateStock'), href: '/pharmacy/inventory/update', icon: RefreshCw },
+    { label: t('navigation.bulkUpload'), href: '/pharmacy/inventory/bulk-upload', icon: Upload },
+    { label: t('navigation.stockHistory'), href: '/pharmacy/inventory/history', icon: FileText },
+    { label: t('navigation.emergencyRequests'), href: '/pharmacy/emergency-requests', icon: AlertOctagon, badge: 'REQUESTS' },
+    { label: t('navigation.reservations'), href: '/pharmacy/reservations', icon: CalendarCheck },
+    { label: t('navigation.dailyReports'), href: '/pharmacy/daily-reports', icon: ClipboardList },
+    { label: t('navigation.notifications'), href: '/pharmacy/notifications', icon: Bell },
+    { label: t('navigation.pharmacyProfile'), href: '/pharmacy/profile', icon: Building2 },
+    { label: t('navigation.settings'), href: '/pharmacy/settings', icon: Settings },
   ],
   HOSPITAL: [
-    { label: 'Dashboard', href: '/hospital/dashboard', icon: LayoutDashboard },
-    { label: 'Patients', href: '/hospital/patients', icon: Stethoscope },
-    { label: 'Inventory', href: '/hospital/inventory', icon: Package },
-    { label: 'Add Medicine', href: '/hospital/inventory/add', icon: Plus },
-    { label: 'Bulk Upload', href: '/hospital/inventory/bulk-upload', icon: Upload },
-    { label: 'Stock History', href: '/hospital/inventory/history', icon: FileText },
-    { label: 'Requests', href: '/hospital/requests', icon: Send },
-    { label: 'Pharmacy Search', href: '/hospital/pharmacy-search', icon: Search },
-    { label: 'Emergency Requests', href: '/hospital/emergency-requests', icon: AlertOctagon, badge: 'EMERGENCY' },
-    { label: 'Smart Allocation', href: '/hospital/allocation', icon: Activity },
-    { label: 'Reservations', href: '/hospital/reservations', icon: CalendarCheck },
-    { label: 'Transfers', href: '/hospital/transfers', icon: ArrowLeftRight },
-    { label: 'Daily Reports', href: '/hospital/daily-reports', icon: ClipboardList },
-    { label: 'Notifications', href: '/hospital/notifications', icon: Bell },
-    { label: 'Hospital Profile', href: '/hospital/profile', icon: Hospital },
-    { label: 'Settings', href: '/hospital/settings', icon: Settings },
+    { label: t('navigation.dashboard'), href: '/hospital/dashboard', icon: LayoutDashboard },
+    { label: t('navigation.patients'), href: '/hospital/patients', icon: Stethoscope },
+    { label: t('navigation.inventory'), href: '/hospital/inventory', icon: Package },
+    { label: t('navigation.addMedicine'), href: '/hospital/inventory/add', icon: Plus },
+    { label: t('navigation.bulkUpload'), href: '/hospital/inventory/bulk-upload', icon: Upload },
+    { label: t('navigation.stockHistory'), href: '/hospital/inventory/history', icon: FileText },
+    { label: t('navigation.requests'), href: '/hospital/requests', icon: Send },
+    { label: t('navigation.pharmacySearch'), href: '/hospital/pharmacy-search', icon: Search },
+    { label: t('navigation.emergencyRequests'), href: '/hospital/emergency-requests', icon: AlertOctagon, badge: 'EMERGENCY' },
+    { label: t('navigation.smartAllocation'), href: '/hospital/allocation', icon: Activity },
+    { label: t('navigation.reservations'), href: '/hospital/reservations', icon: CalendarCheck },
+    { label: t('navigation.transfers'), href: '/hospital/transfers', icon: ArrowLeftRight },
+    { label: t('navigation.dailyReports'), href: '/hospital/daily-reports', icon: ClipboardList },
+    { label: t('navigation.notifications'), href: '/hospital/notifications', icon: Bell },
+    { label: t('navigation.hospitalProfile'), href: '/hospital/profile', icon: Hospital },
+    { label: t('navigation.settings'), href: '/hospital/settings', icon: Settings },
   ],
   ADMIN: [
-    { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Users', href: '/admin/users', icon: Users },
-    { label: 'Pharmacies', href: '/admin/pharmacies', icon: Building2 },
-    { label: 'Hospitals', href: '/admin/hospitals', icon: Hospital },
-    { label: 'Verification', href: '/admin/verification', icon: ShieldCheck, badge: 'VERIFY' },
-    { label: 'Medicine Catalog', href: '/admin/medicines', icon: BookOpen },
-    { label: 'Inventory Monitor', href: '/admin/inventory', icon: Boxes },
-    { label: 'Shortage Monitor', href: '/admin/shortages', icon: AlertOctagon },
-    { label: 'Medicine Requests', href: '/admin/requests', icon: ClipboardList },
-    { label: 'Reservations', href: '/admin/reservations', icon: CalendarCheck },
-    { label: 'Stock Transfers', href: '/admin/transfers', icon: ArrowLeftRight },
-    { label: 'Analytics', href: '/admin/analytics', icon: BarChart2 },
-    { label: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
-    { label: 'Settings', href: '/admin/settings', icon: Settings },
+    { label: t('navigation.dashboard'), href: '/admin/dashboard', icon: LayoutDashboard },
+    { label: t('navigation.users'), href: '/admin/users', icon: Users },
+    { label: t('navigation.pharmacies'), href: '/admin/pharmacies', icon: Building2 },
+    { label: t('navigation.hospitals'), href: '/admin/hospitals', icon: Hospital },
+    { label: t('navigation.verification'), href: '/admin/verification', icon: ShieldCheck, badge: 'VERIFY' },
+    { label: t('navigation.medicineCatalog'), href: '/admin/medicines', icon: BookOpen },
+    { label: t('navigation.inventoryMonitor'), href: '/admin/inventory', icon: Boxes },
+    { label: t('navigation.shortageMonitor'), href: '/admin/shortages', icon: AlertOctagon },
+    { label: t('navigation.medicineRequests'), href: '/admin/requests', icon: ClipboardList },
+    { label: t('navigation.reservations'), href: '/admin/reservations', icon: CalendarCheck },
+    { label: t('navigation.stockTransfers'), href: '/admin/transfers', icon: ArrowLeftRight },
+    { label: t('navigation.analytics'), href: '/admin/analytics', icon: BarChart2 },
+    { label: t('navigation.auditLogs'), href: '/admin/audit-logs', icon: FileText },
+    { label: t('navigation.settings'), href: '/admin/settings', icon: Settings },
   ],
-};
+});
 
-const ROLE_CONFIG: Record<UserRole, { color: string; bg: string; border: string; label: string; accent: string }> = {
-  PATIENT:  { color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe', label: 'Patient Console',  accent: '#3b82f6' },
-  PHARMACY: { color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4', label: 'Pharmacy Console', accent: '#14b8a6' },
-  HOSPITAL: { color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe', label: 'Hospital Console', accent: '#8b5cf6' },
-  ADMIN:    { color: '#9d174d', bg: '#fdf2f8', border: '#fbcfe8', label: 'Admin Console',    accent: '#ec4899' },
-};
+const getRoleConfig = (t: (key: string) => string): Record<UserRole, { color: string; bg: string; border: string; label: string; accent: string }> => ({
+  PATIENT:  { color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe', label: t('nav.patientPortal'),  accent: '#3b82f6' },
+  PHARMACY: { color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4', label: t('nav.pharmacyPortal'), accent: '#14b8a6' },
+  HOSPITAL: { color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe', label: t('nav.hospitalPortal'), accent: '#8b5cf6' },
+  ADMIN:    { color: '#9d174d', bg: '#fdf2f8', border: '#fbcfe8', label: t('nav.adminPortal'),    accent: '#ec4899' },
+});
 
 interface ConsoleLayoutProps {
   children: React.ReactNode;
@@ -88,18 +90,22 @@ interface ConsoleLayoutProps {
 
 export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
   const { currentUser, logout, unreadCount, sources } = useApp();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const role: UserRole = currentUser?.role || 'PATIENT';
-  const navItems = NAV_ITEMS[role] || NAV_ITEMS.PATIENT;
-  const rc = ROLE_CONFIG[role] || ROLE_CONFIG.PATIENT;
+  const roleRaw = (currentUser?.role || 'PATIENT').toUpperCase();
+  const role: UserRole = (['PATIENT', 'PHARMACY', 'HOSPITAL', 'ADMIN'].includes(roleRaw) ? roleRaw : 'PATIENT') as UserRole;
+  const allNavItems = getNavItems(t);
+  const navItems = allNavItems[role] || allNavItems.PATIENT;
+  const roleConfigs = getRoleConfig(t);
+  const rc = roleConfigs[role] || roleConfigs.PATIENT;
 
   const userName = currentUser?.name || currentUser?.organizationName || 'User';
   const userEmail = currentUser?.email || '';
-  const userInitial = userName.charAt(0).toUpperCase() || 'U';
+  const userInitial = (userName && userName.length > 0) ? userName.charAt(0).toUpperCase() : 'U';
 
   const pendingVerificationsCount = sources ? sources.filter(s => s.verificationStatus === 'PENDING' && !s.isDeleted).length : 0;
 
@@ -238,7 +244,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
         {role === 'PATIENT' && (
           <Link
             to="/"
-            title="Return to Public Website"
+            title={t('navigation.publicWebsite')}
             className="sidebar-website-btn"
             style={{
               width: '100%', display: 'flex', alignItems: 'center',
@@ -251,7 +257,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             }}
           >
             <Globe style={{ width: 14, height: 14, color: '#2563eb', flexShrink: 0 }} />
-            {!sidebarCollapsed && <span>Public Website</span>}
+            {!sidebarCollapsed && <span>{t('navigation.publicWebsite')}</span>}
           </Link>
         )}
         <button
@@ -267,7 +273,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
           }}
         >
           <LogOut style={{ width: 14, height: 14, flexShrink: 0 }} />
-          {!sidebarCollapsed && <span>Sign Out</span>}
+          {!sidebarCollapsed && <span>{t('nav.signOut')}</span>}
         </button>
       </div>
     </div>
@@ -377,7 +383,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                 </span>
                 {currentUser?.verificationStatus === 'APPROVED' && (
                   <span
-                    title="Verified Facility"
+                    title={t('common.verified')}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 3,
                       fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99,
@@ -385,7 +391,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                     }}
                   >
                     <ShieldCheck style={{ width: 12, height: 12, color: '#059669' }} />
-                    Verified ✓
+                    {t('common.verified')} ✓
                   </span>
                 )}
               </div>
@@ -395,7 +401,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             {role === 'PATIENT' && (
               <Link
                 to="/"
-                title="Return to Public Website"
+                title={t('navigation.publicWebsite')}
                 className="topbar-website-link"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -406,9 +412,12 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                 }}
               >
                 <Globe style={{ width: 13, height: 13, color: '#2563eb' }} />
-                <span className="hidden sm:inline">Website</span>
+                <span className="hidden sm:inline">{t('navigation.publicWebsite')}</span>
               </Link>
             )}
+
+            {/* Language Switcher */}
+            <LanguageSwitcher />
 
             {/* Role badge */}
             <span style={{

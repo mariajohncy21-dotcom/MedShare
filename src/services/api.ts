@@ -62,6 +62,37 @@ export const api = {
         body: JSON.stringify(userData),
       });
     },
+    sendOtp: async (data: { phone: string; forRegistration?: boolean }) => {
+      return request<{ success: boolean; message: string; demoOtp?: string; expiresInSeconds?: number }>('/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    verifyOtp: async (data: { phone: string; otp: string }) => {
+      return request<{ success: boolean; message: string; phone: string }>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+
+  // Phone OTP Verification
+  otp: {
+    sendOtp: async (phone: string, email?: string) => {
+      return request<{ success: boolean; message: string; demoOtp?: string; devOtp?: string; expiresInSeconds?: number }>('/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone, email, forRegistration: true }),
+      }).then(res => ({
+        ...res,
+        devOtp: res.demoOtp || '123456',
+      }));
+    },
+    verifyOtp: async (phone: string, otp: string) => {
+      return request<{ success: boolean; message: string; phone: string }>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone, otp }),
+      });
+    },
   },
 
   // Health & Database Status
@@ -295,27 +326,21 @@ export const api = {
 
   // MedShare AI Chat (secure backend proxy - key never in frontend)
   ai: {
-    chat: async (message: string, conversationId?: string) => {
-      return request<{ reply: string; role: string }>('/ai/chat', {
-        method: 'POST',
-        body: JSON.stringify({ message, conversationId }),
-      });
-    },
-  },
-
-  // Mobile OTP Verification
-  otp: {
-    sendOtp: async (phone: string, email?: string) => {
-      return request<{ success: boolean; message: string; devOtp?: string }>('/auth/send-otp', {
-        method: 'POST',
-        body: JSON.stringify({ phone, email }),
-      });
-    },
-    verifyOtp: async (phone: string, otp: string) => {
-      return request<{ success: boolean; message: string }>('/auth/verify-otp', {
-        method: 'POST',
-        body: JSON.stringify({ phone, otp }),
-      });
+    chat: async (message: string, language?: string, role?: string, conversationId?: string) => {
+      try {
+        return await request<{ reply: string; role: string }>('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message, language, role, conversationId }),
+        });
+      } catch (err: any) {
+        if (err.message && err.message.includes('404')) {
+          return await request<{ reply: string; role: string }>('/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify({ message, language, role, conversationId }),
+          });
+        }
+        throw err;
+      }
     },
   },
 

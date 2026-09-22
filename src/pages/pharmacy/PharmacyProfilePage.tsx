@@ -26,7 +26,10 @@ export const PharmacyProfilePage: React.FC = () => {
     state: pharmSource?.state || 'Tamil Nadu',
     pincode: pharmSource?.pincode || '627657',
     registrationNumber: pharmSource?.registrationNumber || 'TN-PHA-2026-9921',
-    operatingHours: pharmSource?.operatingHours || '08:00 AM - 10:00 PM',
+    operatingHours: pharmSource?.operatingHours || '08:00 AM - 09:00 PM',
+    openingTime: pharmSource?.openingTime || '08:00 AM',
+    closingTime: pharmSource?.closingTime || '09:00 PM',
+    is24Hours: Boolean(pharmSource?.is24Hours),
     latitude: pharmSource?.latitude || 8.4184,
     longitude: pharmSource?.longitude || 77.8732,
     emergencySupport24x7: Boolean(pharmSource?.emergencySupport24x7),
@@ -207,9 +210,22 @@ export const PharmacyProfilePage: React.FC = () => {
 
                 <div style={{ background: '#fafbfc', padding: 16, borderRadius: 12, border: '1px solid #f1f5f9' }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
-                    Operating Hours &amp; GPS
+                    Operating Hours &amp; Schedule
                   </div>
-                  <div style={{ fontWeight: 700, color: '#0f172a' }}>{form.operatingHours}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{form.operatingHours}</div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 99,
+                      background: form.is24Hours ? '#ecfdf5' : '#fffbeb',
+                      color: form.is24Hours ? '#065f46' : '#92400e',
+                      border: form.is24Hours ? '1px solid #a7f3d0' : '1px solid #fde68a',
+                    }}>
+                      {form.is24Hours ? '🟢 24 Hours Open (Full Day)' : '🕒 08:00 AM - 09:00 PM'}
+                    </span>
+                  </div>
+                  <div style={{ color: '#475569', fontSize: 12, marginTop: 4 }}>
+                    Opening: <strong>{form.openingTime || '08:00 AM'}</strong> • Closing: <strong>{form.closingTime || '09:00 PM'}</strong>
+                  </div>
                   <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
                     GPS Coordinates: {form.latitude.toFixed(4)}, {form.longitude.toFixed(4)}
                   </div>
@@ -302,6 +318,90 @@ export const PharmacyProfilePage: React.FC = () => {
                     onChange={(e) => setForm({ ...form, pincode: e.target.value })}
                     style={{ width: '100%', padding: '8px 10px', fontSize: 12.5, borderRadius: 7, border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
                   />
+                </div>
+              </div>
+
+              {/* Operating Hours & Timing Presets */}
+              <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <label style={{ fontSize: 12.5, fontWeight: 800, color: '#1e293b' }}>
+                    Pharmacy Operating Hours &amp; Schedule Presets
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        is24Hours: true,
+                        openingTime: '12:00 AM',
+                        closingTime: '11:59 PM',
+                        operatingHours: '24 Hours Open (Full Day)',
+                        emergencySupport24x7: true,
+                      })}
+                      style={{
+                        padding: '4px 10px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                        background: form.is24Hours ? '#065f46' : '#ecfdf5',
+                        color: form.is24Hours ? '#fff' : '#047857',
+                        border: '1px solid #a7f3d0', cursor: 'pointer',
+                      }}
+                    >
+                      🟢 24h Full Day Preset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        is24Hours: false,
+                        openingTime: '08:00 AM',
+                        closingTime: '09:00 PM',
+                        operatingHours: '08:00 AM - 09:00 PM',
+                        emergencySupport24x7: false,
+                      })}
+                      style={{
+                        padding: '4px 10px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                        background: !form.is24Hours ? '#92400e' : '#fffbeb',
+                        color: !form.is24Hours ? '#fff' : '#b45309',
+                        border: '1px solid #fde68a', cursor: 'pointer',
+                      }}
+                    >
+                      🕒 08:00 AM - 09:00 PM Preset
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 3 }}>Opening Time</label>
+                    <input
+                      type="text"
+                      value={form.openingTime}
+                      onChange={(e) => {
+                        const newOpen = e.target.value;
+                        setForm({
+                          ...form,
+                          openingTime: newOpen,
+                          operatingHours: form.is24Hours ? '24 Hours Open (Full Day)' : `${newOpen} - ${form.closingTime}`,
+                        });
+                      }}
+                      style={{ width: '100%', padding: '8px 10px', fontSize: 12.5, borderRadius: 7, border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 3 }}>Closing Time</label>
+                    <input
+                      type="text"
+                      value={form.closingTime}
+                      onChange={(e) => {
+                        const newClose = e.target.value;
+                        setForm({
+                          ...form,
+                          closingTime: newClose,
+                          operatingHours: form.is24Hours ? '24 Hours Open (Full Day)' : `${form.openingTime} - ${newClose}`,
+                        });
+                      }}
+                      style={{ width: '100%', padding: '8px 10px', fontSize: 12.5, borderRadius: 7, border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                    />
+                  </div>
                 </div>
               </div>
 

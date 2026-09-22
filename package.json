@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
+    "i18next": "^26.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.41.0",
     "mongodb": "^7.6.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.14",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.3",
     "recharts": "^3.10.1"

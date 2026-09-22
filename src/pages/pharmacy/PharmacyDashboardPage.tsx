@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../../context/AppContext';
 import { ConsoleLayout } from '../../components/common/ConsoleLayout';
 import { api } from '../../services/api';
@@ -56,6 +57,7 @@ export const PharmacyDashboardPage: React.FC = () => {
     currentUser, inventory, sources, reservations,
     pharmacyRequests, stockChangeLogs,
   } = useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const pharmId = currentUser.sourceId || 'SRC-PHARM-001';
@@ -115,7 +117,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                Pharmacy Console Dashboard
+                {t('pharmacy.dashboardTitle')}
               </h1>
               {pharmSource?.verificationStatus === 'APPROVED' && (
                 <span style={{
@@ -124,7 +126,7 @@ export const PharmacyDashboardPage: React.FC = () => {
                   background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0',
                 }}>
                   <ShieldCheck style={{ width: 13, height: 13 }} />
-                  Verified ✓
+                  {t('common.verified')} ✓
                 </span>
               )}
             </div>
@@ -145,7 +147,7 @@ export const PharmacyDashboardPage: React.FC = () => {
               }}
             >
               <Plus style={{ width: 16, height: 16 }} />
-              Add Medicine
+              {t('pharmacy.addMedicineBtn')}
             </Link>
 
             <Link
@@ -158,7 +160,7 @@ export const PharmacyDashboardPage: React.FC = () => {
               }}
             >
               <RefreshCw style={{ width: 15, height: 15 }} />
-              Update Stock
+              {t('pharmacy.updateStockBtn')}
             </Link>
 
             <Link
@@ -172,7 +174,7 @@ export const PharmacyDashboardPage: React.FC = () => {
               }}
             >
               <Upload style={{ width: 15, height: 15, color: '#64748b' }} />
-              Bulk Upload
+              {t('pharmacy.bulkUploadBtn')}
             </Link>
           </div>
         </div>
@@ -224,7 +226,7 @@ export const PharmacyDashboardPage: React.FC = () => {
         }}>
           
           <ClickableStatCard
-            label="Total Medicine Lines"
+            label={t('pharmacy.totalMedicines')}
             value={totalMedicinesCount}
             icon={Package}
             color="#0d9488"
@@ -234,7 +236,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Total Available Stock"
+            label={t('pharmacy.totalAvailableStock')}
             value={totalAvailableStockSum}
             icon={Boxes}
             color="#1d4ed8"
@@ -244,7 +246,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Low Stock Medicines"
+            label={t('pharmacy.lowStockItems')}
             value={lowStockCount}
             icon={TrendingUp}
             color="#d97706"
@@ -254,7 +256,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Critical Stock Lines"
+            label={t('pharmacy.criticalStockItems')}
             value={criticalStockCount}
             icon={AlertTriangle}
             color="#e11d48"
@@ -264,7 +266,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Out of Stock Lines"
+            label={t('pharmacy.outOfStockItems')}
             value={outOfStockCount}
             icon={AlertOctagon}
             color="#dc2626"
@@ -274,7 +276,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Pending Hospital Requests"
+            label={t('pharmacy.pendingHospitalRequests')}
             value={pendingRequestsCount}
             icon={Send}
             color="#7c3aed"
@@ -284,7 +286,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Active Reservations"
+            label={t('pharmacy.activePatientReservations')}
             value={activeReservationsCount}
             icon={CalendarCheck}
             color="#0284c7"
@@ -294,7 +296,7 @@ export const PharmacyDashboardPage: React.FC = () => {
           />
 
           <ClickableStatCard
-            label="Stock Audit Logs"
+            label={t('pharmacy.stockHistoryBtn')}
             value={myLogs.length}
             icon={FileText}
             color="#475569"

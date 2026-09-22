@@ -70,6 +70,122 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 // Shared pages
 import { BulkUploadPage } from './pages/shared/BulkUploadPage';
 
+// ─── Global Error Boundary ──────────────────────────────────────────────────
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('MedShare App ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f8fafc',
+          padding: 24,
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}>
+          <div style={{
+            maxWidth: 480,
+            width: '100%',
+            background: '#ffffff',
+            borderRadius: 16,
+            padding: '32px 28px',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+            border: '1px solid #e2e8f0',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: 52,
+              height: 52,
+              borderRadius: '50%',
+              background: '#fee2e2',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <span style={{ fontSize: 24, fontWeight: 900 }}>!</span>
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
+              Unexpected Display Issue
+            </h2>
+            <p style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, margin: '0 0 16px' }}>
+              MedShare encountered a rendering issue. Your network records and medical data are safe. Please reload or reset your session.
+            </p>
+            {this.state.error && (
+              <details style={{ textAlign: 'left', background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: 8, fontSize: 11, marginBottom: 20, maxHeight: 160, overflow: 'auto' }}>
+                <summary style={{ fontWeight: 700, cursor: 'pointer', marginBottom: 4 }}>Error details</summary>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{this.state.error.toString()}</pre>
+              </details>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                  window.location.reload();
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#1d4ed8',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Reload Page
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/login';
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 10,
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Reset & Login
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // ─── Scroll-to-top on route change ───────────────────────────────────────────
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -78,9 +194,6 @@ function ScrollToTop() {
 }
 
 // ─── Route Guards for Public & Auth Pages ───────────────────────────────────
-// Requires user to be logged in as a citizen/patient to view the website.
-// Unauthenticated visitors are redirected to /login.
-// PHARMACY, HOSPITAL, and ADMIN are strictly redirected to their respective console dashboards.
 function PublicRouteGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isAuthenticated } = useApp();
 
@@ -89,14 +202,16 @@ function PublicRouteGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
+  const role = (currentUser.role || 'PATIENT').toUpperCase();
+
   // If facility or admin, strictly redirect to their console
-  if (currentUser.role === 'PHARMACY') {
+  if (role === 'PHARMACY') {
     return <Navigate to="/pharmacy/dashboard" replace />;
   }
-  if (currentUser.role === 'HOSPITAL') {
+  if (role === 'HOSPITAL') {
     return <Navigate to="/hospital/dashboard" replace />;
   }
-  if (currentUser.role === 'ADMIN') {
+  if (role === 'ADMIN') {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
@@ -108,25 +223,23 @@ function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const { currentUser, isAuthenticated } = useApp();
 
   if (isAuthenticated && currentUser && currentUser.id !== 'guest') {
-    if (currentUser.role === 'PHARMACY') {
+    const role = (currentUser.role || 'PATIENT').toUpperCase();
+    if (role === 'PHARMACY') {
       return <Navigate to="/pharmacy/dashboard" replace />;
     }
-    if (currentUser.role === 'HOSPITAL') {
+    if (role === 'HOSPITAL') {
       return <Navigate to="/hospital/dashboard" replace />;
     }
-    if (currentUser.role === 'ADMIN') {
+    if (role === 'ADMIN') {
       return <Navigate to="/admin/dashboard" replace />;
     }
-    if (currentUser.role === 'PATIENT') {
-      return <Navigate to="/" replace />;
-    }
+    return <Navigate to="/patient/dashboard" replace />;
   }
 
   return <>{children}</>;
 }
 
 // ─── Navbar visibility ────────────────────────────────────────────────────────
-// Strictly show public Navbar ONLY when user is logged in as PATIENT
 function NavbarContainer() {
   const { pathname } = useLocation();
   const { currentUser, isAuthenticated } = useApp();
@@ -136,8 +249,9 @@ function NavbarContainer() {
     return null;
   }
 
+  const role = (currentUser.role || 'PATIENT').toUpperCase();
   // If facility or admin, strictly NEVER show public navbar
-  if (currentUser.role !== 'PATIENT') {
+  if (role !== 'PATIENT') {
     return null;
   }
 
@@ -149,11 +263,12 @@ function NavbarContainer() {
     pathname === '/forgot';
   if (isAuth) return null;
 
-  // Hide on console routes
+  // Hide on console routes (including patient console which has ConsoleLayout)
   const isConsole =
     pathname.startsWith('/pharmacy') ||
     pathname.startsWith('/hospital') ||
-    pathname.startsWith('/admin');
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/patient');
   if (isConsole) return null;
 
   return <Navbar />;
@@ -169,8 +284,9 @@ function FooterContainer() {
     return null;
   }
 
+  const role = (currentUser.role || 'PATIENT').toUpperCase();
   // If facility or admin, strictly hide public footer
-  if (currentUser.role !== 'PATIENT') {
+  if (role !== 'PATIENT') {
     return null;
   }
 
@@ -184,7 +300,8 @@ function FooterContainer() {
   const isConsole =
     pathname.startsWith('/pharmacy') ||
     pathname.startsWith('/hospital') ||
-    pathname.startsWith('/admin');
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/patient');
   if (isConsole) return null;
 
   return <Footer />;
@@ -209,8 +326,9 @@ function ChatbotContainer() {
 
 export function App() {
   return (
-    <AppProvider>
-      <Router>
+    <ErrorBoundary>
+      <AppProvider>
+        <Router>
         <ScrollToTop />
 
         <NavbarContainer />
@@ -616,6 +734,7 @@ export function App() {
         <ChatbotContainer />
       </Router>
     </AppProvider>
+  </ErrorBoundary>
   );
 }
 

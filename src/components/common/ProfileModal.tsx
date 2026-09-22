@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../../context/AppContext';
 import { User, MedicalSource } from '../../types';
 import {
@@ -31,6 +32,7 @@ const SAMPLE_AVATARS = [
 ];
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const { currentUser, updateUserProfile, sources } = useApp();
 
   const [name, setName] = useState(currentUser.name);
@@ -187,13 +189,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <p className="text-[10px] text-slate-400">Default municipal zone: Tisaiyanvilai (627657), Tamil Nadu</p>
           </div>
 
-          {/* Verification License info for Pharmacies and Hospitals */}
+          {/* Verification License & Operating Hours for Pharmacies and Hospitals */}
           {currentSource && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 uppercase">Drug Authority License Number</span>
                 <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                   {currentSource.registrationNumber}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Pharmacy Timings</span>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                  currentSource.is24Hours
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}>
+                  {currentSource.is24Hours ? '🟢 24 Hours Open (Full Day)' : `🕒 ${currentSource.openingTime || '08:00 AM'} - ${currentSource.closingTime || '09:00 PM'}`}
                 </span>
               </div>
               <p className="text-[10px] text-slate-500">
@@ -209,7 +221,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -218,12 +230,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {savedSuccess ? (
                 <>
                   <Check className="w-4 h-4 text-white" />
-                  <span>Profile Saved!</span>
+                  <span>{t('common.saved')}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>Save Profile Updates</span>
+                  <span>{t('common.save')}</span>
                 </>
               )}
             </button>

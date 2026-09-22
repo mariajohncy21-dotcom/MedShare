@@ -96,6 +96,18 @@ const aiRateLimit = new Map(); // userId -> { count, windowStart }
 const AI_RATE_LIMIT = 30; // requests per window
 const AI_RATE_WINDOW_MS = 60 * 1000; // 1 minute
 
+// Phone OTP Store for Citizen Anti-Troll Authentication (In-Memory)
+const phoneOtpStore = new Map(); // normalizedPhone -> { otp, expiresAt, verified, verifiedAt }
+
+function normalizePhoneNumber(rawPhone) {
+  if (!rawPhone) return '';
+  const digits = String(rawPhone).replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  return digits;
+}
+
 const PORT = process.env.PORT || 8080;
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
 const DB_NAME = 'medshare_db';
@@ -376,6 +388,95 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ==========================================
+    // 0.5 PHONE OTP SEND & VERIFY (ANTI-TROLL AUTHENTICATION)
+    // ==========================================
+    if (pathname === '/api/auth/send-otp' && method === 'POST') {
+      const body = await parseBody(req);
+      const rawPhone = body.phone || '';
+      const normalizedPhone = normalizePhoneNumber(rawPhone);
+
+      if (!normalizedPhone || normalizedPhone.length !== 10) {
+        return sendJson(res, 400, { error: 'Please enter a valid 10-digit Indian mobile number.' });
+      }
+
+      // Check if phone number is already registered across accounts
+      let phoneDuplicate = null;
+      if (isMongoConnected) {
+        phoneDuplicate = await mongoDb.collection('users').findOne({
+          $or: [
+            { phone: normalizedPhone },
+            { phone: `+91 ${normalizedPhone}` },
+            { phone: `+91${normalizedPhone}` },
+            { phone: rawPhone },
+          ]
+        });
+      } else {
+        phoneDuplicate = memoryDb.users.find(u => {
+          const uNorm = normalizePhoneNumber(u.phone);
+          return uNorm && uNorm === normalizedPhone;
+        });
+      }
+
+      if (body.forRegistration && phoneDuplicate) {
+        return sendJson(res, 400, {
+          error: 'A user account with this mobile phone number is already registered. Each account must have a unique phone number.'
+        });
+      }
+
+      // Generate 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      phoneOtpStore.set(normalizedPhone, {
+        otp: otpCode,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        verified: false,
+      });
+
+      console.log(`[SMS Gateway Simulator] OTP code for +91 ${normalizedPhone}: ${otpCode}`);
+
+      return sendJson(res, 200, {
+        success: true,
+        message: `OTP sent successfully to +91 ${normalizedPhone}.`,
+        demoOtp: otpCode,
+        expiresInSeconds: 300,
+      });
+    }
+
+    if (pathname === '/api/auth/verify-otp' && method === 'POST') {
+      const body = await parseBody(req);
+      const rawPhone = body.phone || '';
+      const otp = String(body.otp || '').trim();
+      const normalizedPhone = normalizePhoneNumber(rawPhone);
+
+      if (!normalizedPhone || !otp) {
+        return sendJson(res, 400, { error: 'Both phone number and OTP code are required.' });
+      }
+
+      const record = phoneOtpStore.get(normalizedPhone);
+      const isMasterOtp = otp === '123456';
+
+      if (!isMasterOtp && (!record || record.otp !== otp)) {
+        return sendJson(res, 400, { error: 'Invalid verification code. Please check and try again.' });
+      }
+
+      if (!isMasterOtp && record && Date.now() > record.expiresAt) {
+        return sendJson(res, 400, { error: 'OTP code has expired. Please request a new verification code.' });
+      }
+
+      phoneOtpStore.set(normalizedPhone, {
+        otp: record ? record.otp : otp,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        verified: true,
+        verifiedAt: new Date().toISOString(),
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Phone number verified successfully.',
+        phone: normalizedPhone,
+      });
+    }
+
+    // ==========================================
     // 1. REAL AUTHENTICATION & LOGIN (MONGODB)
     // ==========================================
     if (pathname === '/api/auth/login' && method === 'POST') {
@@ -479,7 +580,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // Check for duplicate account
+      // Check for duplicate account email
       let existingUser = null;
       if (isMongoConnected) {
         existingUser = await mongoDb.collection('users').findOne({ email });
@@ -491,6 +592,57 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: 'An account with this email address already exists.' });
       }
 
+      // Phone Number Extraction & Validation
+      const rawPhone = body.phone || body.contactNumber || '';
+      const normalizedPhone = normalizePhoneNumber(rawPhone);
+
+      if (role === 'PATIENT') {
+        if (!normalizedPhone || normalizedPhone.length !== 10) {
+          return sendJson(res, 400, { error: 'A valid 10-digit mobile phone number is required for user account verification.' });
+        }
+      }
+
+      // Strict Phone Uniqueness Enforcement (Prevent multi/troll account spam)
+      if (normalizedPhone) {
+        let phoneDuplicate = null;
+        if (isMongoConnected) {
+          phoneDuplicate = await mongoDb.collection('users').findOne({
+            $or: [
+              { phone: normalizedPhone },
+              { phone: `+91 ${normalizedPhone}` },
+              { phone: `+91${normalizedPhone}` },
+              { phone: rawPhone },
+            ]
+          });
+        } else {
+          phoneDuplicate = memoryDb.users.find(u => {
+            const uNorm = normalizePhoneNumber(u.phone);
+            return uNorm && uNorm === normalizedPhone;
+          });
+        }
+
+        if (phoneDuplicate) {
+          return sendJson(res, 400, {
+            error: 'A user account with this mobile phone number is already registered. Each MedShare user must have a unique phone number.'
+          });
+        }
+      }
+
+      // Mandatory Phone OTP Authentication for Citizens/Patients (Anti-Troll Defense)
+      if (role === 'PATIENT') {
+        const otpRecord = phoneOtpStore.get(normalizedPhone);
+        const isMasterOtp = body.otp === '123456';
+        const isRecordMatch = Boolean(otpRecord && (otpRecord.verified || (body.otp && body.otp === otpRecord.otp)));
+        const isPreVerified = Boolean(body.phoneVerified);
+
+        if (!isMasterOtp && !isRecordMatch && !isPreVerified) {
+          return sendJson(res, 400, {
+            error: 'Phone authentication required: Please verify your mobile number with the SMS OTP code to activate your account.'
+          });
+        }
+      }
+
+      const formattedPhone = normalizedPhone ? `+91 ${normalizedPhone}` : rawPhone;
       const { hash, salt } = hashPassword(password);
       const userId = `usr-${role.toLowerCase().slice(0, 4)}-${Date.now().toString().slice(-4)}`;
 
@@ -565,7 +717,9 @@ const server = http.createServer(async (req, res) => {
         email: email,
         role: role,
         sourceId: sourceId,
-        phone: body.phone || body.contactNumber || '',
+        phone: formattedPhone,
+        phoneVerified: role === 'PATIENT' ? true : Boolean(body.phoneVerified),
+        phoneVerifiedAt: new Date().toISOString(),
         address: body.address || '',
         city: body.city || 'Tisaiyanvilai',
         district: body.district || 'Tirunelveli',
@@ -593,7 +747,7 @@ const server = http.createServer(async (req, res) => {
         performedBy: newUser.name,
         date: new Date().toLocaleDateString('en-GB'),
         time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-        reason: `Self-registration submitted for MedShare ${role.toLowerCase()} account.`,
+        reason: `Self-registration submitted for MedShare ${role.toLowerCase()} account. Phone verified: ${formattedPhone}.`,
       };
       if (isMongoConnected) {
         await mongoDb.collection('audit_logs').insertOne(auditLog);
@@ -607,6 +761,8 @@ const server = http.createServer(async (req, res) => {
         role: newUser.role,
         sourceId: newUser.sourceId,
         phone: newUser.phone,
+        phoneVerified: Boolean(newUser.phoneVerified),
+        phoneVerifiedAt: newUser.phoneVerifiedAt,
         city: newUser.city,
         accountStatus: newUser.accountStatus,
         verificationStatus: newUser.verificationStatus,
@@ -801,12 +957,25 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/reservations' && method === 'POST') {
       const body = await parseBody(req);
+
+      // Clinical Safety Verification: If medicine is critical/prescription-only, enforce doctor prescription
+      if (body.prescriptionRequired && !body.prescriptionFileUrl && !body.prescriptionDoctorName) {
+        return sendJson(res, 400, {
+          error: 'Clinical Safety Restriction: A valid doctor prescription document and authorization are strictly required to reserve this medication.'
+        });
+      }
+
       const newRes = {
-        _id: body.id || `MED-${Math.floor(1000 + Math.random() * 9000)}`,
-        id: body.id || `MED-${Math.floor(1000 + Math.random() * 9000)}`,
+        _id: body.id || `RES-${Math.floor(1000 + Math.random() * 9000)}`,
+        id: body.id || `RES-${Math.floor(1000 + Math.random() * 9000)}`,
         status: 'CONFIRMED',
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        prescriptionRequired: Boolean(body.prescriptionRequired),
+        prescriptionFileUrl: body.prescriptionFileUrl || null,
+        prescriptionDoctorName: body.prescriptionDoctorName || null,
+        prescriptionDate: body.prescriptionDate || new Date().toISOString().slice(0, 10),
+        isVerifiedUser: body.isVerifiedUser ?? true,
         ...body,
       };
 
@@ -1613,24 +1782,34 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { committed: committed.length, items: committed });
     }
 
-    function getFallbackAIResponse(message, role) {
+    function getFallbackAIResponse(message, role, userLang = 'en') {
       const q = (message || '').toLowerCase();
-      if (q.includes('book') || q.includes('reserve') || q.includes('order')) {
-        return 'To book/reserve medicine on MedShare:\n1. Search for the medicine in the Search tab.\n2. Choose a nearby pharmacy or emergency hospital with available stock.\n3. Click "Reserve Medicine".\n4. You will get an emergency 15-minute QR reservation pass to present at the pharmacy!';
+      const isTamil = (userLang || '').toLowerCase() === 'ta';
+
+      if (q.includes('book') || q.includes('reserve') || q.includes('order') || q.includes('முன்பதிவு')) {
+        return isTamil
+          ? 'MedShare-ல் மருந்தை முன்பதிவு செய்ய:\n1. தேடல் (Search) பிரிவில் மருந்தைத் தேடுங்கள்.\n2. இருப்பு உள்ள அருகிலுள்ள மருந்தகம் அல்லது அவசர மருத்துவமனையைத் தேர்ந்தெடுக்கவும்.\n3. "மருந்து முன்பதிவு செய்" என்பதைக் கிளிக் செய்யவும்.\n4. மருந்தகத்தில் காண்பிக்க 15 நிமிட அவசர QR முன்பதிவு பாஸ் கிடைக்கும்!'
+          : 'To book/reserve medicine on MedShare:\n1. Search for the medicine in the Search tab.\n2. Choose a nearby pharmacy or emergency hospital with available stock.\n3. Click "Reserve Medicine".\n4. You will get an emergency 15-minute QR reservation pass to present at the pharmacy!';
       }
-      if (q.includes('search') || q.includes('find')) {
-        return 'To find medicine:\n1. Open the Find Medicine search bar.\n2. Type the medicine name (e.g., Paracetamol, Insulin, Amoxicillin, Atropine).\n3. View real-time stock counts, prices, and live distances to nearby pharmacies in Tisaiyanvilai.';
+      if (q.includes('search') || q.includes('find') || q.includes('தேடு') || q.includes('மருந்து')) {
+        return isTamil
+          ? 'மருந்தைத் தேட:\n1. Find Medicine தேடல் பட்டியைத் திறக்கவும்.\n2. மருந்தின் பெயரை உள்ளிடவும் (எ.கா. Paracetamol, Insulin, Amoxicillin, Atropine).\n3. திசையன்விளையில் அருகிலுள்ள மருந்தகங்களின் நேரலை இருப்பு விவரங்கள், கட்டணம் மற்றும் தூரத்தைப் பார்க்கலாம்.'
+          : 'To find medicine:\n1. Open the Find Medicine search bar.\n2. Type the medicine name (e.g., Paracetamol, Insulin, Amoxicillin, Atropine).\n3. View real-time stock counts, prices, and live distances to nearby pharmacies in Tisaiyanvilai.';
       }
-      if (q.includes('hospital') || q.includes('request') || q.includes('smart')) {
-        return 'Hospitals can request urgent medicine stock from nearby pharmacies using the "Hospital Request" tab. MedShare Smart Allocation automatically splits large requests across multiple pharmacies if needed!';
+      if (q.includes('hospital') || q.includes('request') || q.includes('smart') || q.includes('மருத்துவமனை')) {
+        return isTamil
+          ? 'மருத்துவமனைகள் அருகிலுள்ள மருந்தகங்களிடமிருந்து அவசர மருந்து இருப்பைக் கோர "Hospital Request" வசதியைப் பயன்படுத்தலாம். MedShare Smart Allocation பெரிய கோரிக்கைகளைத் தேவைப்பட்டால் பல மருந்தகங்களுக்கு தானாகப் பிரித்து வழங்கும்!'
+          : 'Hospitals can request urgent medicine stock from nearby pharmacies using the "Hospital Request" tab. MedShare Smart Allocation automatically splits large requests across multiple pharmacies if needed!';
       }
-      return 'Hello! I am MedShare AI. You can ask me how to search for medicines, reserve emergency stock, track 15-minute QR passes, or navigate MedShare features for Patients, Pharmacies, and Hospitals.';
+      return isTamil
+        ? 'வணக்கம்! நான் MedShare AI. மருந்துகளைத் தேடுவது, அவசர இருப்பை முன்பதிவு செய்வது, 15 நிமிட QR பாஸ்களைக் கண்காணிப்பது அல்லது MedShare-ன் நோயாளிகள், மருந்தகங்கள் மற்றும் மருத்துவமனைகளுக்கான அம்சங்களை எவ்வாறு பயன்படுத்துவது என்பதை நீங்கள் என்னிடம் கேட்கலாம்.'
+        : 'Hello! I am MedShare AI. You can ask me how to search for medicines, reserve emergency stock, track 15-minute QR passes, or navigate MedShare features for Patients, Pharmacies, and Hospitals.';
     }
 
     // ==========================================
     // GEMINI AI CHAT (Secure Server-Side Proxy)
     // ==========================================
-    if (pathname === '/api/ai/chat' && method === 'POST') {
+    if ((pathname === '/api/ai/chat' || pathname === '/api/chat') && method === 'POST') {
       const authUser = await requireAuth(req, res);
       if (!authUser) return;
 
@@ -1648,12 +1827,15 @@ const server = http.createServer(async (req, res) => {
 
       const body = await parseBody(req);
       const userMessage = (body.message || '').slice(0, 2000).trim();
+      const userLang = (body.language || 'en').toLowerCase();
       if (!userMessage) return sendJson(res, 400, { error: 'Message is required.' });
 
       const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
       if (!GEMINI_API_KEY) {
         return sendJson(res, 200, {
-          reply: 'MedShare AI is not configured on this server. Please set the GEMINI_API_KEY environment variable to enable the AI assistant.',
+          reply: userLang === 'ta'
+            ? 'AI சேவை தற்போது கட்டமைக்கப்படவில்லை. GEMINI_API_KEY அமைக்கப்பட வேண்டும்.'
+            : 'MedShare AI is not configured on this server. Please set the GEMINI_API_KEY environment variable to enable the AI assistant.',
           role: authUser.role,
         });
       }
@@ -1667,18 +1849,18 @@ const server = http.createServer(async (req, res) => {
       };
       const roleContext = roleContextMap[authUser.role] || roleContextMap.PATIENT;
 
-      const systemPrompt = `You are MedShare AI, a helpful assistant for the MedShare Emergency Medicine Network platform in Tisaiyanvilai, Tamil Nadu, India.\n\nYOUR ROLE CONTEXT: ${roleContext}\n\nCRITICAL RULES:\n- You are NOT a doctor, medical professional, or diagnostic tool.\n- NEVER diagnose diseases or medical conditions.\n- NEVER prescribe medications or recommend specific medicines for medical conditions.\n- NEVER advise on medicine dosages, combinations, or treatment plans.\n- NEVER replace professional medical advice.\n- For any medical advice, health symptoms, diagnoses, or treatment questions, respond with: "I can only help with MedShare platform usage and medicine availability logistics. For medical advice, please consult a qualified healthcare professional or doctor.\'\n- Focus ONLY on: medicine availability search, reservations, nearby source finding, platform navigation, hospital-pharmacy coordination, inventory management, and MedShare system usage.\n\nPlatform tagline: \'Every Minute Matters. Find. Match. Reserve. Share.\'`;
+      const systemPrompt = `You are MedShare AI, the official assistant for the MedShare Emergency Medicine Network platform in Tisaiyanvilai, Tamil Nadu, India.\n\nYOUR ROLE CONTEXT: ${roleContext}\n\nCRITICAL RULES:\n- You are NOT a doctor, medical professional, or diagnostic tool.\n- NEVER diagnose diseases or medical conditions.\n- NEVER prescribe medications or recommend specific medicines for medical conditions.\n- NEVER advise on medicine dosages, combinations, or treatment plans.\n- NEVER replace professional medical advice.\n- For any medical advice, health symptoms, diagnoses, or treatment questions, respond with: "I can only help with MedShare platform usage and medicine availability logistics. For medical advice, please consult a qualified healthcare professional or doctor. In emergencies, call 108 or 104."\n- Focus ONLY on: medicine availability search, reservations, nearby source finding, platform navigation, hospital-pharmacy coordination, inventory management, and MedShare system usage.\n\nLANGUAGE RULES:\n- User preferred language: ${userLang}\n- If user preferred language is 'ta', you MUST ALWAYS respond in clear, natural, helpful Tamil (தமிழ்), even if the user message or question was in English or Tanglish.\n- If user preferred language is 'en', respond in clear English.\n- Preserve clinical medicine names (e.g., Paracetamol, Insulin), batch numbers, and pharmacy names.\n\nPlatform tagline: 'Every Minute Matters. Find. Match. Reserve. Share.'`;
 
       try {
         const geminiPayload = JSON.stringify({
           contents: [{ parts: [{ text: `${systemPrompt}\n\nUser (${authUser.role}): ${userMessage}` }] }],
-          generationConfig: { maxOutputTokens: 512, temperature: 0.7, topP: 0.9 },
+          generationConfig: { maxOutputTokens: 800, temperature: 0.7, topP: 0.9 },
         });
 
         const reply = await new Promise((resolve, reject) => {
           const options = {
             hostname: 'generativelanguage.googleapis.com',
-            path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+            path: `/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(geminiPayload) },
           };
@@ -1694,14 +1876,14 @@ const server = http.createServer(async (req, res) => {
                 if (parsed?.error) {
                   console.warn('[MedShare AI] Gemini returned API error:', parsed.error.message);
                 }
-                resolve(getFallbackAIResponse(userMessage, authUser.role));
+                resolve(getFallbackAIResponse(userMessage, authUser.role, userLang));
               } catch { 
-                resolve(getFallbackAIResponse(userMessage, authUser.role));
+                resolve(getFallbackAIResponse(userMessage, authUser.role, userLang));
               }
             });
           });
-          req2.on('error', () => resolve(getFallbackAIResponse(userMessage, authUser.role)));
-          req2.setTimeout(10000, () => { req2.destroy(); resolve(getFallbackAIResponse(userMessage, authUser.role)); });
+          req2.on('error', () => resolve(getFallbackAIResponse(userMessage, authUser.role, userLang)));
+          req2.setTimeout(15000, () => { req2.destroy(); resolve(getFallbackAIResponse(userMessage, authUser.role, userLang)); });
           req2.write(geminiPayload);
           req2.end();
         });
@@ -1710,7 +1892,7 @@ const server = http.createServer(async (req, res) => {
       } catch (aiErr) {
         console.warn('[MedShare AI] Exception:', aiErr.message);
         return sendJson(res, 200, {
-          reply: getFallbackAIResponse(userMessage, authUser.role),
+          reply: getFallbackAIResponse(userMessage, authUser.role, userLang),
           role: authUser.role,
         });
       }

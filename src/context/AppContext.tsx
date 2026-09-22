@@ -57,7 +57,18 @@ interface AppContextType {
   unreadCount: number;
 
   // Actions
-  createReservation: (plan: AllocationPlan, patientInfo?: { name: string; phone: string }) => Reservation;
+  createReservation: (
+    plan: AllocationPlan,
+    patientInfo?: {
+      name: string;
+      phone: string;
+      prescriptionFileUrl?: string;
+      prescriptionDoctorName?: string;
+      prescriptionDate?: string;
+      prescriptionRequired?: boolean;
+      isVerifiedUser?: boolean;
+    }
+  ) => Reservation;
   updateReservationStatus: (reservationId: string, status: ReservationStatus, sourceId?: string) => void;
   cancelReservation: (reservationId: string, reason?: string) => void;
   createEmergencyRequest: (req: Omit<EmergencyRequest, 'id' | 'createdAt' | 'status' | 'matchedSourcesCount'>) => EmergencyRequest;
@@ -127,8 +138,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [currentUser, setCurrentUser] = useState<User>(() => {
-    const saved = localStorage.getItem('medshare_user_v2');
-    return saved ? JSON.parse(saved) : { id: 'guest', name: 'Guest', email: '', role: 'PATIENT' as const };
+    try {
+      const saved = localStorage.getItem('medshare_user_v2');
+      if (!saved) return { id: 'guest', name: 'Guest', email: '', role: 'PATIENT' as const };
+      const parsed = JSON.parse(saved);
+      // Handle nested user object if it was stored as { user: { ... } }
+      const resolved = parsed?.user && typeof parsed.user === 'object' ? parsed.user : parsed;
+      if (resolved && resolved.role) {
+        resolved.role = String(resolved.role).toUpperCase();
+        return resolved;
+      }
+      return resolved || { id: 'guest', name: 'Guest', email: '', role: 'PATIENT' as const };
+    } catch {
+      return { id: 'guest', name: 'Guest', email: '', role: 'PATIENT' as const };
+    }
   });
 
   const [medicines, setMedicines] = useState<Medicine[]>(MOCK_MEDICINES);
@@ -408,9 +431,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
       const response = await api.auth.login({ email, password });
-      const { token, ...user } = response as any;
+      const resObj = response as any;
+      const rawUser = resObj?.user || resObj;
+      const token = resObj?.token || rawUser?.token;
       if (token) {
         setToken(token);
+      }
+      const user: User = { ...rawUser };
+      if ((user as any).token) {
+        delete (user as any).token;
+      }
+      if (user.role) {
+        user.role = String(user.role).toUpperCase() as UserRole;
+      } else {
+        const em = (user.email || email || '').toLowerCase();
+        if (em.includes('admin')) user.role = 'ADMIN';
+        else if (em.endsWith('@pharm.com') || em.includes('pharm')) user.role = 'PHARMACY';
+        else if (em.endsWith('@hos.com') || em.includes('hos')) user.role = 'HOSPITAL';
+        else user.role = 'PATIENT';
       }
       setCurrentUser(user);
       setIsAuthenticated(true);
@@ -431,9 +469,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
       const response = await api.auth.register(data);
-      const { token, ...user } = response as any;
+      const resObj = response as any;
+      const rawUser = resObj?.user || resObj;
+      const token = resObj?.token || rawUser?.token;
       if (token) {
         setToken(token);
+      }
+      const user: User = { ...rawUser };
+      if ((user as any).token) {
+        delete (user as any).token;
+      }
+      if (user.role) {
+        user.role = String(user.role).toUpperCase() as UserRole;
       }
       // Auto-login citizen patients after registration
       if (user.role === 'PATIENT') {
@@ -487,7 +534,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const createReservation = (plan: AllocationPlan, patientInfo?: { name: string; phone: string }): Reservation => {
+  const createReservation = (
+    plan: AllocationPlan,
+    patientInfo?: {
+      name: string;
+      phone: string;
+      prescriptionFileUrl?: string;
+      prescriptionDoctorName?: string;
+      prescriptionDate?: string;
+      prescriptionRequired?: boolean;
+      isVerifiedUser?: boolean;
+    }
+  ): Reservation => {
     const resId = `MED-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes window
@@ -505,6 +563,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
       qrToken: `MS-RES-${resId}-${Math.floor(10000 + Math.random() * 90000)}`,
+      prescriptionRequired: patientInfo?.prescriptionRequired ?? false,
+      prescriptionFileUrl: patientInfo?.prescriptionFileUrl || undefined,
+      prescriptionDoctorName: patientInfo?.prescriptionDoctorName || undefined,
+      prescriptionDate: patientInfo?.prescriptionDate || undefined,
+      isVerifiedUser: patientInfo?.isVerifiedUser ?? (currentUser?.phoneVerified ?? true),
       allocationBreakdown: plan.allocatedSources.map((s) => ({
         sourceId: s.sourceId,
         sourceName: s.sourceName,

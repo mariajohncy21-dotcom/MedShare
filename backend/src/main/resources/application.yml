@@ -23,3 +23,6 @@ medshare:
     state: "Tamil Nadu"
     center-lat: 8.4184
     center-lon: 77.8732
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.6-flash}

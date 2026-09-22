@@ -28,6 +28,8 @@ export interface User {
   accountStatus?: AccountStatus;
   city?: string;
   pincode?: string;
+  phoneVerified?: boolean;
+  phoneVerifiedAt?: string;
 }
 
 export interface MedicalSource {
@@ -46,6 +48,7 @@ export interface MedicalSource {
   operatingHours: string;
   openingTime?: string;
   closingTime?: string;
+  is24Hours?: boolean;
   availabilityStatus?: 'ACTIVE_ONLINE' | 'BUSY' | 'OFFLINE' | 'CLOSED';
   isVerified: boolean;
   verificationStatus: VerificationStatus;
@@ -171,32 +174,47 @@ export interface Reservation {
   qrToken: string;
   prescriptionRequired?: boolean;
   prescriptionAcknowledged?: boolean;
+  prescriptionFileUrl?: string;
+  prescriptionDoctorName?: string;
+  prescriptionDate?: string;
+  isVerifiedUser?: boolean;
   allocationBreakdown: {
     sourceId: string;
     sourceName: string;
     quantity: number;
     address: string;
     phone: string;
-    sourceStatus: 'PENDING' | 'CONFIRMED' | 'COLLECTED';
+    sourceStatus: 'CONFIRMED' | 'COLLECTED';
   }[];
+  // Optional aliases and compatibility fields
+  patientName?: string;
+  patientPhone?: string;
+  sourceName?: string;
+  sourceId?: string;
+  quantity?: number;
+  totalPrice?: number;
+  reservationCode?: string;
 }
 
 export interface EmergencyRequest {
-  id: string; // e.g. EMR-8892
-  patientName: string;
-  patientPhone: string;
+  id: string;
   medicineId: string;
   medicineName: string;
+  patientName: string;
+  patientPhone: string;
   quantity: number;
   urgency: 'URGENT' | 'CRITICAL';
   location: string;
   latitude?: number;
   longitude?: number;
   additionalNotes?: string;
+  notes?: string;
+  deliveryAddress?: string;
+  sourceId?: string;
   hospitalId?: string;
   requesterId?: string;
   requestedQuantity?: number;
-  status: 'BROADCASTING' | 'MATCHED' | 'FULFILLED' | 'CANCELLED' | 'PENDING';
+  status: 'BROADCASTING' | 'MATCHED' | 'FULFILLED' | 'CANCELLED' | 'PENDING' | 'ALLOCATED' | 'IN_TRANSIT' | 'COMPLETED';
   createdAt: string;
   matchedSourcesCount: number;
 }

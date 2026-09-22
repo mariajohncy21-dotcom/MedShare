@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../../context/AppContext';
 import { ConsoleLayout } from '../../components/common/ConsoleLayout';
 import { api } from '../../services/api';
@@ -36,6 +37,7 @@ export const AdminDashboardPage: React.FC = () => {
     sources, inventory, auditLogs, reservations, emergencyRequests,
     approveSource, rejectSource, suspendSource, reactivateSource, softDeleteSource,
   } = useApp();
+  const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<'OVERVIEW'|'VERIFICATION'|'ORGANIZATIONS'|'INVENTORY'|'DAILY_REPORTS'|'AUDIT'>('OVERVIEW');
   const [sourceFilter, setSourceFilter] = useState<'ALL'|'PHARMACY'|'HOSPITAL'>('ALL');
@@ -77,7 +79,14 @@ export const AdminDashboardPage: React.FC = () => {
 
   useEffect(() => { fetchAdminReportsSummary(); }, []);
 
-  const TABS = ['OVERVIEW','VERIFICATION','ORGANIZATIONS','INVENTORY','DAILY_REPORTS','AUDIT'];
+  const TABS = [
+    { id: 'OVERVIEW', label: t('console.dashboard') },
+    { id: 'VERIFICATION', label: t('navigation.verification') },
+    { id: 'ORGANIZATIONS', label: t('console.organizations') },
+    { id: 'INVENTORY', label: t('console.inventory') },
+    { id: 'DAILY_REPORTS', label: t('console.reports') },
+    { id: 'AUDIT', label: t('console.auditLogs') },
+  ];
 
   return (
     <ConsoleLayout>
@@ -85,7 +94,7 @@ export const AdminDashboardPage: React.FC = () => {
 
         {/* Header */}
         <div style={{ marginBottom:24 }}>
-          <h1 style={{ fontSize:24, fontWeight:800, color:'#0f172a', margin:'0 0 4px' }}>Admin Control Centre</h1>
+          <h1 style={{ fontSize:24, fontWeight:800, color:'#0f172a', margin:'0 0 4px' }}>{t('admin.dashboardTitle')}</h1>
           <p style={{ fontSize:13, color:'#64748b', margin:0 }}>
             MedShare Network Administration · Tisaiyanvilai, Tamil Nadu
           </p>
@@ -93,26 +102,26 @@ export const AdminDashboardPage: React.FC = () => {
 
         {/* Stats */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(185px,1fr))', gap:12, marginBottom:24 }}>
-          <StatCard label="Pharmacies" value={pharmacies.length} icon={Building2} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
-          <StatCard label="Hospitals" value={hospitals.length} icon={Hospital} color="#6d28d9" bg="#f5f3ff" border="#ddd6fe" />
-          <StatCard label="Pending Verification" value={pending.length} icon={Clock} color="#d97706" bg="#fffbeb" border="#fde68a" />
-          <StatCard label="Approved Active" value={approved.length} icon={CheckCircle2} color="#059669" bg="#f0fdf4" border="#bbf7d0" />
-          <StatCard label="Suspended" value={suspended.length} icon={Pause} color="#dc2626" bg="#fef2f2" border="#fecaca" />
-          <StatCard label="Critical Stock Alerts" value={criticalStock.length} icon={AlertOctagon} color="#9d174d" bg="#fdf2f8" border="#fbcfe8" />
+          <StatCard label={t('admin.totalPharmacies')} value={pharmacies.length} icon={Building2} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
+          <StatCard label={t('admin.totalHospitals')} value={hospitals.length} icon={Hospital} color="#6d28d9" bg="#f5f3ff" border="#ddd6fe" />
+          <StatCard label={t('admin.pendingVerifications')} value={pending.length} icon={Clock} color="#d97706" bg="#fffbeb" border="#fde68a" />
+          <StatCard label={t('status.APPROVED')} value={approved.length} icon={CheckCircle2} color="#059669" bg="#f0fdf4" border="#bbf7d0" />
+          <StatCard label={t('status.SUSPENDED')} value={suspended.length} icon={Pause} color="#dc2626" bg="#fef2f2" border="#fecaca" />
+          <StatCard label={t('admin.systemAlerts')} value={criticalStock.length} icon={AlertOctagon} color="#9d174d" bg="#fdf2f8" border="#fbcfe8" />
         </div>
 
         {/* Tabs */}
         <div style={{ display:'flex', gap:4, borderBottom:'2px solid #f1f5f9', marginBottom:20, overflowX:'auto' }}>
-          {TABS.map(t => (
-            <button key={t} onClick={() => setActiveTab(t as any)} style={{
+          {TABS.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{
               padding:'9px 18px', borderRadius:'8px 8px 0 0', border:'none', cursor:'pointer', whiteSpace:'nowrap',
-              background: activeTab===t ? '#fff' : 'transparent',
-              color: activeTab===t ? '#9d174d' : '#64748b',
-              fontWeight: activeTab===t ? 700 : 500, fontSize:13,
-              borderBottom: activeTab===t ? '2px solid #9d174d' : '2px solid transparent',
+              background: activeTab===tab.id ? '#fff' : 'transparent',
+              color: activeTab===tab.id ? '#9d174d' : '#64748b',
+              fontWeight: activeTab===tab.id ? 700 : 500, fontSize:13,
+              borderBottom: activeTab===tab.id ? '2px solid #9d174d' : '2px solid transparent',
             }}>
-              {t.charAt(0)+t.slice(1).toLowerCase().replace('_',' ')}
-              {t === 'VERIFICATION' && pending.length > 0 && (
+              {tab.label}
+              {tab.id === 'VERIFICATION' && pending.length > 0 && (
                 <span style={{ marginLeft:6, background:'#dc2626', color:'#fff', fontSize:10, fontWeight:800, padding:'1px 6px', borderRadius:99 }}>{pending.length}</span>
               )}
             </button>

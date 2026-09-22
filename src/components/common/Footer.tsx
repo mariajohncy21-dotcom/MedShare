@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { HeartPulse, ShieldAlert, PhoneCall, Mail, MapPin, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export const Footer: React.FC = () => {
+  const { t } = useTranslation();
   const year = new Date().getFullYear();
 
   return (
@@ -36,7 +38,7 @@ export const Footer: React.FC = () => {
               </span>
             </Link>
             <p style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.6, margin: '0 0 10px' }}>
-              Emergency medicine availability &amp; smart allocation network.
+              {t('footer.description')}
             </p>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -52,15 +54,14 @@ export const Footer: React.FC = () => {
           {/* Emergency Core */}
           <div>
             <h5 style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-              Emergency Core
+              {t('nav.emergency')}
             </h5>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'Find Medicine', href: '/search' },
-                { label: '🚨 Emergency Broadcast', href: '/emergency', accent: true },
-                { label: 'Stock Redistribution', href: '/redistribution' },
-                { label: 'Live Availability Map', href: '/map' },
-                { label: 'Reservation Tracker', href: '/reservations' },
+                { label: t('nav.findMedicine'), href: '/search' },
+                { label: `🚨 ${t('nav.emergency')}`, href: '/emergency', accent: true },
+                { label: t('nav.liveMap'), href: '/map' },
+                { label: t('nav.reservations'), href: '/reservations' },
               ].map(({ label, href, accent }) => (
                 <li key={href}>
                   <Link
@@ -77,15 +78,14 @@ export const Footer: React.FC = () => {
           {/* Role Portals */}
           <div>
             <h5 style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-              Role Portals
+              {t('nav.portal')}
             </h5>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'User Dashboard', href: '/reservations' },
-                { label: 'Pharmacy Console', href: '/pharmacy' },
-                { label: 'Hospital Emergency Hub', href: '/hospital' },
-                { label: 'Admin & Drug Control', href: '/admin' },
-                { label: 'Smart Allocation Engine', href: '/how-it-works' },
+                { label: t('nav.patientPortal'), href: '/reservations' },
+                { label: t('nav.pharmacyPortal'), href: '/pharmacy' },
+                { label: t('nav.hospitalPortal'), href: '/hospital' },
+                { label: t('nav.adminPortal'), href: '/admin' },
               ].map(({ label, href }) => (
                 <li key={href}>
                   <Link
@@ -102,12 +102,12 @@ export const Footer: React.FC = () => {
           {/* Disclaimer */}
           <div>
             <h5 style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-              Medical Notice
+              {t('chatbot.disclaimer').split(':')[0] || 'Medical Notice'}
             </h5>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <ShieldAlert style={{ width: 13, height: 13, color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
               <p style={{ fontSize: 11, color: '#475569', lineHeight: 1.6, margin: 0 }}>
-                MedShare is a logistics coordination network only. It does not provide medical diagnosis or write prescriptions. A valid prescription is required for all pickups.
+                {t('chatbot.disclaimer')}
               </p>
             </div>
           </div>

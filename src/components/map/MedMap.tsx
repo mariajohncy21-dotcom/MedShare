@@ -469,15 +469,24 @@ export const MedMap: React.FC<MedMapProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-[11px] text-slate-600 space-y-1 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <div className="text-[11px] text-slate-600 space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                       <p className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                         <span className="truncate">{source.address}</span>
                       </p>
-                      <p className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span>{source.operatingHours}</span>
-                      </p>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className={`inline-flex items-center gap-1 font-extrabold text-[10px] px-2 py-0.5 rounded-md ${
+                          source.is24Hours
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          <Clock className="w-3 h-3 flex-shrink-0" />
+                          {source.is24Hours ? 'Full Day (24h Open)' : '08:00 AM - 09:00 PM'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-semibold">
+                          {source.is24Hours ? '12:00 AM - 11:59 PM' : '8 AM to 9 PM'}
+                        </span>
+                      </div>
                       <p className="flex items-center justify-between font-bold text-slate-800 pt-1 border-t border-slate-200">
                         <span>Distance: {dist} km</span>
                         <span className="text-teal-700">⭐ {source.rating}</span>

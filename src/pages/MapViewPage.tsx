@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { MedMap } from '../components/map/MedMap';
 import { RouteModal } from '../components/map/RouteModal';
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 
 export const MapViewPage: React.FC = () => {
+  const { t } = useTranslation();
   const { sources, inventory, medicines } = useApp();
 
   // Filter States
@@ -163,10 +165,10 @@ export const MapViewPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Live Medical Facility & Medicine Map
+              {t('map.title')}
             </h1>
             <p className="text-xs sm:text-sm text-blue-200/80 mt-1 max-w-2xl">
-              Filter by facility category (Pharmacies or Hospitals) and distance radius (e.g. 2 km) to view available stock and navigate.
+              {t('map.subtitle')}
             </p>
           </div>
 
@@ -180,7 +182,7 @@ export const MapViewPage: React.FC = () => {
                 className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all cursor-pointer"
               >
                 <LocateFixed className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-                <span>{isLocating ? 'Detecting Location...' : '📍 Use Current GPS'}</span>
+                <span>{isLocating ? t('common.loading') : `📍 ${t('map.useCurrentLocation')}`}</span>
               </button>
 
               <button
@@ -194,7 +196,7 @@ export const MapViewPage: React.FC = () => {
                 title="Reset map center to Tisaiyanvilai 627657"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reset Center</span>
+                <span>{t('common.clear')}</span>
               </button>
             </div>
             <span className="text-[11px] text-blue-300/80">
@@ -210,7 +212,7 @@ export const MapViewPage: React.FC = () => {
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 text-xs">
           {/* 1. Category Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <span className="font-extrabold text-blue-200 uppercase tracking-wider text-[11px]">Category:</span>
+            <span className="font-extrabold text-blue-200 uppercase tracking-wider text-[11px]">{t('common.filter')}:</span>
             <div className="flex rounded-xl bg-slate-900/60 p-1 border border-white/10">
               <button
                 type="button"
@@ -221,7 +223,7 @@ export const MapViewPage: React.FC = () => {
                     : 'text-blue-200/80 hover:text-white'
                 }`}
               >
-                All Facilities ({totalCountAll})
+                {t('common.all')} ({totalCountAll})
               </button>
 
               <button
@@ -233,7 +235,7 @@ export const MapViewPage: React.FC = () => {
                     : 'text-blue-200/80 hover:text-white'
                 }`}
               >
-                Pharmacies Only ({totalPharmacies})
+                {t('map.pharmacy')} ({totalPharmacies})
               </button>
 
               <button
@@ -245,7 +247,7 @@ export const MapViewPage: React.FC = () => {
                     : 'text-blue-200/80 hover:text-white'
                 }`}
               >
-                Hospitals Only ({totalHospitals})
+                {t('map.hospital')} ({totalHospitals})
               </button>
             </div>
           </div>
@@ -430,28 +432,31 @@ export const MapViewPage: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Travel Estimate & 24x7 Tag */}
+                  {/* Travel Estimate & Pharmacy Timing Tag */}
                   <div className="flex items-center justify-between text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">
                     <span className="font-semibold text-blue-700 text-[10.5px]">
                       🚗 ~{s.estMinutes}m • 🚶 ~{Math.round(s.distanceKm * 12)}m
                     </span>
-                    {s.emergencySupport24x7 ? (
-                      <span className="font-black text-red-600 text-[9.5px] uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-                        24x7 Emergency
+                    {s.is24Hours ? (
+                      <span className="font-black text-emerald-700 text-[9.5px] uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> 24h Full Day
                       </span>
                     ) : (
-                      <span className="text-[9.5px] font-bold text-slate-500">
-                        Day Hours
+                      <span className="font-black text-amber-800 text-[9.5px] uppercase bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5 text-amber-600" /> 8 AM - 9 PM
                       </span>
                     )}
                   </div>
 
-                  {/* Stock Availability Info */}
+                  {/* Stock Availability & Schedule Info */}
                   <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
                     <span className="text-slate-500">
                       <strong className="text-slate-800">{s.batchCount}</strong> batches in stock
                     </span>
-                    <span className="font-bold text-emerald-700 truncate max-w-[110px] text-[10.5px]">{s.operatingHours}</span>
+                    <span className={`font-bold truncate text-[10.5px] flex items-center gap-1 ${s.is24Hours ? 'text-emerald-700' : 'text-amber-800'}`}>
+                      <Clock className="w-3 h-3 flex-shrink-0" />
+                      {s.is24Hours ? '24 Hours Open' : (s.operatingHours || '08:00 AM - 09:00 PM')}
+                    </span>
                   </div>
 
                   {/* Actions */}

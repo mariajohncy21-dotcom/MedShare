@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { EmergencyRequest } from '../types';
 import {
@@ -20,6 +21,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export const EmergencyRequestPage: React.FC = () => {
+  const { t } = useTranslation();
   const { medicines, sources, emergencyRequests, createEmergencyRequest } = useApp();
   const navigate = useNavigate();
 
@@ -75,10 +77,10 @@ export const EmergencyRequestPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-2">
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight">
-              🚨 Emergency Medicine Request Portal
+              🚨 {t('home.emergencyCoordination')}
             </h1>
             <p className="text-xs sm:text-sm text-red-100 max-w-2xl leading-relaxed">
-              Instantly broadcast life-critical medicine shortages directly to on-duty hospital dispensaries, ICU supply officers, and 24/7 emergency pharmacies across your regional network.
+              {t('home.emergencyDesc')}
             </p>
           </div>
           <div className="flex-shrink-0">
@@ -148,14 +150,14 @@ export const EmergencyRequestPage: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Urgency Level</label>
+                  <label className="block font-bold text-slate-700">{t('findMedicine.urgencyLabel')}</label>
                   <select
                     value={urgency}
                     onChange={(e) => setUrgency(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-red-300 bg-red-50 text-red-800 font-black"
                   >
-                    <option value="CRITICAL">🔴 Critical (ICU / Code Red)</option>
-                    <option value="URGENT">🟡 Urgent (within 2 Hours)</option>
+                    <option value="CRITICAL">🔴 {t('findMedicine.urgencyCritical')}</option>
+                    <option value="URGENT">🟡 {t('findMedicine.urgencyUrgent')}</option>
                   </select>
                 </div>
 
@@ -201,7 +203,7 @@ export const EmergencyRequestPage: React.FC = () => {
                 className="w-full py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm shadow-xl shadow-red-500/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
                 <Radio className={`w-4 h-4 ${isBroadcasting ? 'animate-spin' : ''}`} />
-                <span>{isBroadcasting ? 'Broadcasting to Tisaiyanvilai Grid...' : 'Broadcast Emergency Need Now'}</span>
+                <span>{isBroadcasting ? t('common.loading') : `🚨 ${t('home.requestEmergencyStock')}`}</span>
               </button>
             </form>
           </div>
