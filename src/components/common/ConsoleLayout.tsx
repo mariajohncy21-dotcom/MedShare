@@ -6,7 +6,7 @@ import {
   AlertOctagon, BookOpen, ArrowLeftRight, Bell, User, Settings, LogOut,
   ChevronLeft, ChevronRight, Menu, Users, Building2, Hospital,
   ShieldCheck, FileText, Activity, Search, Map, Stethoscope,
-  CalendarCheck, Boxes, Send, RefreshCw, BarChart2, Globe
+  CalendarCheck, Boxes, Send, RefreshCw, BarChart2, Globe, X
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { NotificationDropdown } from './NotificationDropdown';
@@ -117,56 +117,87 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
 
-  const renderSidebarContent = () => (
+  const renderSidebarContent = (isMobileDrawer = false) => (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
       background: '#fff', borderRight: '1px solid #e2e8f0',
     }}>
-      {/* Brand */}
-      <Link
-        to={`/${role.toLowerCase()}/dashboard`}
-        style={{
-          padding: sidebarCollapsed ? '20px 12px' : '20px 20px',
-          borderBottom: '1px solid #f1f5f9',
-          display: 'flex', alignItems: 'center',
-          gap: 12, minHeight: 68, textDecoration: 'none',
-        }}
-      >
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: `linear-gradient(135deg, ${rc.color}, ${rc.accent})`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 4px 12px ${rc.color}40`,
-        }}>
-          <HeartPulse style={{ width: 18, height: 18, color: '#fff' }} />
-        </div>
-        {!sidebarCollapsed && (
-          <div style={{ overflow: 'hidden' }}>
-            <p style={{ fontWeight: 900, fontSize: 16, letterSpacing: '-0.03em', color: '#0f172a', margin: 0 }}>
-              Med<span style={{ color: rc.color }}>Share</span>
-            </p>
-            <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, margin: 0, whiteSpace: 'nowrap' }}>
-              {rc.label}
-            </p>
+      {/* Brand & Mobile Close Button */}
+      <div style={{
+        padding: sidebarCollapsed && !isMobileDrawer ? '16px 12px' : '16px 18px',
+        borderBottom: '1px solid #f1f5f9',
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: 64,
+      }}>
+        <Link
+          to={`/${role.toLowerCase()}/dashboard`}
+          onClick={() => isMobileDrawer && setMobileSidebarOpen(false)}
+          style={{
+            display: 'flex', alignItems: 'center',
+            gap: 12, textDecoration: 'none',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            background: `linear-gradient(135deg, ${rc.color}, ${rc.accent})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 4px 12px ${rc.color}40`,
+          }}>
+            <HeartPulse style={{ width: 18, height: 18, color: '#fff' }} />
           </div>
+          {(!sidebarCollapsed || isMobileDrawer) && (
+            <div style={{ overflow: 'hidden' }}>
+              <p style={{ fontWeight: 900, fontSize: 16, letterSpacing: '-0.03em', color: '#0f172a', margin: 0 }}>
+                Med<span style={{ color: rc.color }}>Share</span>
+              </p>
+              <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, margin: 0, whiteSpace: 'nowrap' }}>
+                {rc.label}
+              </p>
+            </div>
+          )}
+        </Link>
+
+        {/* Explicit Close Button inside Drawer on mobile */}
+        {isMobileDrawer && (
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close menu"
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              background: '#f1f5f9',
+              border: '1px solid #e2e8f0',
+              color: '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <X style={{ width: 18, height: 18 }} />
+          </button>
         )}
-      </Link>
+      </div>
 
       {/* Nav items */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '12px 8px', scrollbarWidth: 'thin' }}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          const collapsed = sidebarCollapsed && !isMobileDrawer;
           return (
             <Link
               key={item.href}
               to={item.href}
               onClick={() => setMobileSidebarOpen(false)}
-              title={sidebarCollapsed ? item.label : undefined}
+              title={collapsed ? item.label : undefined}
               className="console-nav-item"
               style={{
                 display: 'flex', alignItems: 'center',
-                gap: 10, padding: sidebarCollapsed ? '10px 12px' : '9px 12px',
+                gap: 10, padding: collapsed ? '10px 12px' : '9px 12px',
                 borderRadius: 9, marginBottom: 2,
                 background: active ? rc.bg : 'transparent',
                 color: active ? rc.color : '#64748b',
@@ -175,16 +206,16 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                 border: `1px solid ${active ? rc.border : 'transparent'}`,
                 transition: 'all 0.15s ease',
                 position: 'relative',
-                justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                justifyContent: collapsed ? 'center' : 'flex-start',
               }}
             >
               <Icon style={{ width: 16, height: 16, flexShrink: 0 }} />
-              {!sidebarCollapsed && (
+              {!collapsed && (
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {item.label}
                 </span>
               )}
-              {!sidebarCollapsed && item.badge === 'REQUESTS' && unreadCount > 0 && (
+              {!collapsed && item.badge === 'REQUESTS' && unreadCount > 0 && (
                 <span style={{
                   marginLeft: 'auto', background: rc.color, color: '#fff',
                   fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99,
@@ -192,7 +223,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
                   {unreadCount}
                 </span>
               )}
-              {!sidebarCollapsed && item.badge === 'VERIFY' && pendingVerificationsCount > 0 && (
+              {!collapsed && item.badge === 'VERIFY' && pendingVerificationsCount > 0 && (
                 <span style={{
                   marginLeft: 'auto', background: '#d97706', color: '#fff',
                   fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99,
@@ -208,9 +239,9 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
       {/* User footer */}
       <div style={{
         borderTop: '1px solid #f1f5f9',
-        padding: sidebarCollapsed ? '12px 8px' : '12px 12px',
+        padding: sidebarCollapsed && !isMobileDrawer ? '12px 8px' : '12px 12px',
       }}>
-        {!sidebarCollapsed && (
+        {(!sidebarCollapsed || isMobileDrawer) && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 10px', background: '#f8fafc',
@@ -248,7 +279,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             className="sidebar-website-btn"
             style={{
               width: '100%', display: 'flex', alignItems: 'center',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              justifyContent: sidebarCollapsed && !isMobileDrawer ? 'center' : 'flex-start',
               gap: 8, padding: '8px 10px', borderRadius: 8,
               background: 'transparent', border: '1px solid #e2e8f0',
               color: '#334151', fontWeight: 600, fontSize: 12.5,
@@ -257,7 +288,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
             }}
           >
             <Globe style={{ width: 14, height: 14, color: '#2563eb', flexShrink: 0 }} />
-            {!sidebarCollapsed && <span>{t('navigation.publicWebsite')}</span>}
+            {(!sidebarCollapsed || isMobileDrawer) && <span>{t('navigation.publicWebsite')}</span>}
           </Link>
         )}
         <button
@@ -265,7 +296,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
           className="sidebar-logout-btn"
           style={{
             width: '100%', display: 'flex', alignItems: 'center',
-            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+            justifyContent: sidebarCollapsed && !isMobileDrawer ? 'center' : 'flex-start',
             gap: 8, padding: '8px 10px', borderRadius: 8,
             background: 'transparent', border: '1px solid #fee2e2',
             color: '#dc2626', fontWeight: 600, fontSize: 12.5,
@@ -273,7 +304,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
           }}
         >
           <LogOut style={{ width: 14, height: 14, flexShrink: 0 }} />
-          {!sidebarCollapsed && <span>{t('nav.signOut')}</span>}
+          {(!sidebarCollapsed || isMobileDrawer) && <span>{t('nav.signOut')}</span>}
         </button>
       </div>
     </div>
@@ -282,13 +313,14 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay with blur */}
       {mobileSidebarOpen && (
         <div
           onClick={() => setMobileSidebarOpen(false)}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-            zIndex: 200, display: 'block',
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 1200, display: 'block',
           }}
         />
       )}
@@ -306,7 +338,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
       }}
         className="sidebar-desktop"
       >
-        {renderSidebarContent()}
+        {renderSidebarContent(false)}
         {/* Collapse toggle */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -327,15 +359,17 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
 
       {/* Mobile sidebar (drawer) */}
       <aside style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0, width: 256,
+        position: 'fixed', top: 0, left: 0, bottom: 0,
+        width: 'min(280px, 85vw)',
         transform: mobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
         transition: 'transform 0.25s ease',
-        zIndex: 300,
+        zIndex: 1300,
         display: 'block',
+        boxShadow: mobileSidebarOpen ? '4px 0 24px rgba(0,0,0,0.18)' : 'none',
       }}
         className="sidebar-mobile"
       >
-        {renderSidebarContent()}
+        {renderSidebarContent(true)}
       </aside>
 
       {/* Main area */}
@@ -343,42 +377,49 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
         {/* Topbar */}
         <header style={{
           background: '#fff', borderBottom: '1px solid #e2e8f0',
-          padding: '0 24px', height: 60,
+          padding: '0 12px', height: 60,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexShrink: 0, zIndex: 50,
           boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          gap: 8,
+        }}
+          className="sm:px-6"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <button
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 padding: 6, borderRadius: 8, color: '#64748b',
-                display: 'flex', alignItems: 'center',
+                display: 'flex', alignItems: 'center', flexShrink: 0,
               }}
               className="mobile-menu-btn"
+              aria-label="Toggle navigation menu"
             >
               <Menu style={{ width: 20, height: 20 }} />
             </button>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <span style={{
                 fontSize: 9, fontWeight: 800, textTransform: 'uppercase' as const,
                 letterSpacing: '0.1em', color: '#94a3b8', display: 'block',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 MedShare / {rc.label}
               </span>
               <span style={{
                 fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'block',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {navItems.find(n => isActive(n.href))?.label || rc.label}
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Facility Name & Verified Badge for Pharmacy & Hospital */}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {/* Facility Name & Verified Badge for Pharmacy & Hospital (Desktop only to prevent mobile overflow) */}
             {(role === 'PHARMACY' || role === 'HOSPITAL') && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+              <div className="hidden lg:flex items-center gap-2 mr-2">
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {userName}
                 </span>
                 {currentUser?.verificationStatus === 'APPROVED' && (
@@ -397,45 +438,53 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
               </div>
             )}
 
-            {/* Public website link - only visible for patients */}
+            {/* Public website link - only visible for patients on md+ */}
             {role === 'PATIENT' && (
               <Link
                 to="/"
                 title={t('navigation.publicWebsite')}
-                className="topbar-website-link"
+                className="topbar-website-link hidden sm:inline-flex"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '5px 12px', borderRadius: 8,
+                  alignItems: 'center', gap: 6,
+                  padding: '5px 10px', borderRadius: 8,
                   background: '#f1f5f9', border: '1px solid #e2e8f0',
                   color: '#334151', fontSize: 12, fontWeight: 700,
                   textDecoration: 'none', transition: 'all 0.12s ease',
                 }}
               >
                 <Globe style={{ width: 13, height: 13, color: '#2563eb' }} />
-                <span className="hidden sm:inline">{t('navigation.publicWebsite')}</span>
+                <span>{t('navigation.publicWebsite')}</span>
               </Link>
             )}
 
             {/* Language Switcher */}
             <LanguageSwitcher />
 
-            {/* Role badge */}
-            <span style={{
-              fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 99,
-              background: rc.bg, color: rc.color, border: `1px solid ${rc.border}`,
-              textTransform: 'uppercase' as const, letterSpacing: '0.06em',
-            }}>
+            {/* Role badge (Desktop only) */}
+            <span
+              className="hidden md:inline-flex"
+              style={{
+                fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 99,
+                background: rc.bg, color: rc.color, border: `1px solid ${rc.border}`,
+                textTransform: 'uppercase' as const, letterSpacing: '0.06em',
+              }}
+            >
               {role}
             </span>
+
+            {/* Notifications */}
             <NotificationDropdown />
+
+            {/* Profile Avatar */}
             <Link
               to={`/${role.toLowerCase()}/profile`}
               title="View Profile"
               style={{
-                width: 34, height: 34, borderRadius: 9,
+                width: 32, height: 32, borderRadius: 8,
                 background: `linear-gradient(135deg, ${rc.color}, ${rc.accent})`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontWeight: 800, fontSize: 13, textDecoration: 'none',
+                color: '#fff', fontWeight: 800, fontSize: 12.5, textDecoration: 'none',
+                flexShrink: 0,
               }}
             >
               {userInitial}
@@ -471,3 +520,4 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({ children }) => {
   );
 };
 export default ConsoleLayout;
+

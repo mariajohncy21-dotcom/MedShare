@@ -132,7 +132,7 @@ export const Home: React.FC = () => {
       <section style={{
         background: 'linear-gradient(145deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%)',
         color: '#fff',
-        padding: '64px 24px 80px',
+        padding: 'clamp(44px, 8vw, 64px) clamp(14px, 4vw, 24px) clamp(50px, 10vw, 80px)',
         position: 'relative',
         overflow: 'hidden',
       }}>
@@ -153,9 +153,7 @@ export const Home: React.FC = () => {
         <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           {/* Hero Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 48, alignItems: 'center' }}
-            className="lg:grid-cols-[1fr_420px]"
-          >
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 lg:gap-12 items-center">
             {/* Left Content */}
             <div>
               <div style={{ marginBottom: 16 }}>
@@ -368,23 +366,23 @@ export const Home: React.FC = () => {
           LIVE STATS STRIP
       ───────────────────────────────────────────────────────── */}
       <section style={{ background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 0 }} className="sm:grid-cols-4">
-            {stats.map(({ label, value, color, icon: Icon }, i) => (
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 16px' }}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+            {stats.map(({ label, value, color, icon: Icon }) => (
               <div
                 key={label}
                 style={{
-                  padding: '20px 24px',
-                  borderRight: i < stats.length - 1 ? '1px solid #f1f5f9' : 'none',
-                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '16px 14px',
+                  display: 'flex', alignItems: 'center', gap: 12,
                 }}
+                className="sm:p-5"
               >
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon style={{ width: 20, height: 20, color }} />
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon style={{ width: 19, height: 19, color }} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0, fontFamily: 'var(--font-heading)' }}>{value}</p>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0, fontFamily: 'var(--font-heading)' }}>{value}</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
                 </div>
               </div>
             ))}
@@ -395,7 +393,7 @@ export const Home: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────
           AI MEDICINE IMAGE & PRESCRIPTION SCANNER SECTION
       ───────────────────────────────────────────────────────── */}
-      <section id="scanner-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 24px 0' }}>
+      <section id="scanner-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '32px clamp(12px, 3vw, 24px) 0' }}>
         <MedicineImageScanner
           onMedicineMatched={(med) => {
             setSelectedCategory(med.category);
@@ -407,7 +405,7 @@ export const Home: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────
           ESSENTIAL MEDICINES CATALOG (4-CARDS-PER-ROW RECTANGULAR GRID)
       ───────────────────────────────────────────────────────── */}
-      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '48px 24px 0' }}>
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '40px clamp(12px, 3vw, 24px) 0' }}>
         <div className="space-y-6">
           {/* Section Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -528,15 +526,15 @@ export const Home: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────
           CAPABILITIES
       ───────────────────────────────────────────────────────── */}
-      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '48px 24px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '40px clamp(14px, 3vw, 24px)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
             Engineered for Smart India Hackathon
           </p>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 900, color: '#0f172a', margin: '0 0 10px', letterSpacing: '-0.02em' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 900, color: '#0f172a', margin: '0 0 10px', letterSpacing: '-0.02em' }}>
             How MedShare Solves Drug Logistics
           </h2>
-          <p style={{ fontSize: 14, color: '#64748b', maxWidth: 520, margin: '0 auto' }}>
+          <p style={{ fontSize: 13.5, color: '#64748b', maxWidth: 520, margin: '0 auto' }}>
             A unified state healthcare network connecting patient reservations, pharmacy inventories, and hospital trauma centers.
           </p>
         </div>
@@ -549,7 +547,7 @@ export const Home: React.FC = () => {
                 background: '#fff',
                 border: '1px solid #e2e8f0',
                 borderRadius: 18,
-                padding: '28px 24px',
+                padding: '24px 20px',
                 boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                 transition: 'all 0.15s ease',
               }}
@@ -562,11 +560,11 @@ export const Home: React.FC = () => {
                 (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
               }}
             >
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                <Icon style={{ width: 22, height: 22, color }} />
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Icon style={{ width: 20, height: 20, color }} />
               </div>
-              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>{title}</h3>
-              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.65, margin: 0 }}>{desc}</p>
+              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 15.5, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>{title}</h3>
+              <p style={{ fontSize: 12.5, color: '#64748b', lineHeight: 1.6, margin: 0 }}>{desc}</p>
             </div>
           ))}
         </div>
@@ -575,47 +573,47 @@ export const Home: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────
           CTA STRIP
       ───────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 24px 64px' }}>
+      <section style={{ padding: '0 clamp(14px, 3vw, 24px) 56px' }}>
         <div style={{
           maxWidth: 1280, margin: '0 auto',
           background: 'linear-gradient(135deg, #1e3a8a, #1d4ed8)',
           borderRadius: 20,
-          padding: '40px 32px',
+          padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 32px)',
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24,
+          gap: 20,
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Zap style={{ width: 18, height: 18, color: '#fbbf24' }} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Real-time Response</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Zap style={{ width: 16, height: 16, color: '#fbbf24' }} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Real-time Response</span>
             </div>
-            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 22, fontWeight: 900, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.02em' }}>
+            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 900, color: '#fff', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
               Ready to coordinate emergency medicine?
             </h3>
-            <p style={{ fontSize: 13, color: '#93c5fd', margin: 0 }}>
+            <p style={{ fontSize: 12.5, color: '#93c5fd', margin: 0 }}>
               Get instant access to live inventory across {activeSources.length} verified healthcare facilities.
             </p>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <Link
               to="/search"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '11px 22px', borderRadius: 9,
+                padding: '10px 20px', borderRadius: 9,
                 background: '#fff', color: '#1d4ed8',
                 fontSize: 13, fontWeight: 800,
                 textDecoration: 'none',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
               }}
             >
-              <Search style={{ width: 15, height: 15 }} />
+              <Search style={{ width: 14, height: 14 }} />
               Search Medicine
             </Link>
             <Link
               to="/map"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '11px 22px', borderRadius: 9,
+                padding: '10px 20px', borderRadius: 9,
                 background: 'rgba(255,255,255,0.12)',
                 border: '1.5px solid rgba(255,255,255,0.25)',
                 color: '#e2e8f0',
@@ -623,7 +621,7 @@ export const Home: React.FC = () => {
                 textDecoration: 'none',
               }}
             >
-              <MapPin style={{ width: 15, height: 15 }} />
+              <MapPin style={{ width: 14, height: 14 }} />
               View Live Map
             </Link>
           </div>

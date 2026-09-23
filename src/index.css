@@ -570,4 +570,95 @@
   overflow: hidden !important;
 }
 
+/* =========================================================
+   COMPREHENSIVE MOBILE RESPONSIVENESS SYSTEM
+   ========================================================= */
 
+/* Adaptive Console Page Container */
+.console-page-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .console-page-container {
+    padding: 24px 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .console-page-container {
+    padding: 28px 32px;
+  }
+}
+
+/* Responsive Form Grids: 1 col on mobile, 2 cols on tablet/desktop */
+.responsive-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .responsive-form-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+}
+
+/* Responsive Table Wrapper: enables smooth horizontal scrolling without layout breaking */
+.table-responsive-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-lg, 12px);
+  position: relative;
+}
+
+.table-responsive-wrapper table {
+  min-width: 580px;
+  width: 100%;
+}
+
+/* Modal mobile adaptation */
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 12px !important;
+  }
+  .modal-card {
+    max-width: 100% !important;
+    border-radius: 18px !important;
+    max-height: 94vh !important;
+  }
+}
+
+/* Horizontal scroll bar pill container for tabs & filters on mobile */
+.mobile-tabs-scroll {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+
+.mobile-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prevent image and media overflow on small screens */
+img, video, svg, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fix mobile viewport overflow */
+html, body {
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
+}

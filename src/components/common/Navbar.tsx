@@ -18,6 +18,7 @@ import {
   MapPin,
   LogIn,
   UserPlus,
+  Home,
 } from 'lucide-react';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +52,21 @@ export const Navbar: React.FC = () => {
       setMobileMenuOpen(false);
     }
   }, [location.pathname]);
+
+  // Lock background body scroll whenever the mobile navigation menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [mobileMenuOpen]);
 
   const getDashboardLink = () => {
     switch (currentUser?.role) {
@@ -89,11 +105,12 @@ export const Navbar: React.FC = () => {
 
   const roleColors = getRoleColors();
 
-  // Navigation Links explicitly requested: Home, Find Medicine, Live Map, Emergency
+  // Navigation Links: Home, Find Medicine, Live Map, Reservations, Emergency
   const primaryLinks = [
-    { name: t('nav.reservations'), href: '/reservations', icon: CalendarCheck },
+    { name: 'Home', href: '/', icon: Home },
     { name: t('nav.findMedicine'), href: '/search', icon: Search },
     { name: t('nav.liveMap'), href: '/map', icon: MapPin },
+    { name: t('nav.reservations'), href: '/reservations', icon: CalendarCheck },
     { name: t('nav.emergency'), href: '/emergency', icon: AlertOctagon, isEmergency: true },
   ];
 
@@ -140,13 +157,13 @@ export const Navbar: React.FC = () => {
               >
                 <HeartPulse style={{ width: 18, height: 18 }} />
               </div>
-              <div className="hidden sm:block">
+              <div className="flex flex-col">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span
                     style={{
                       fontFamily: 'var(--font-heading)',
                       fontWeight: 900,
-                      fontSize: 17,
+                      fontSize: 16,
                       letterSpacing: '-0.03em',
                       color: '#0f172a',
                     }}
@@ -169,23 +186,14 @@ export const Navbar: React.FC = () => {
                     Grid
                   </span>
                 </div>
-                <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, margin: 0, lineHeight: 1 }}>
+                <p className="hidden sm:block" style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, margin: 0, lineHeight: 1 }}>
                   Emergency Medicine Network
                 </p>
               </div>
             </Link>
 
-            {/* ── Middle Gap & All Buttons on Right (Home -> Find Medicine -> Emergency -> Notification -> Dashboard -> Profile) ── */}
-            <div
-              className="hidden md:flex"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                flexWrap: 'nowrap',
-                marginLeft: 'auto',
-              }}
-            >
+            {/* ── Desktop Navigation on Right (Hidden on mobile < md) ── */}
+            <div className="hidden md:flex items-center gap-2 ml-auto flex-nowrap">
               {/* 1. Home, 2. Find Medicine, 3. Emergency */}
               {primaryLinks.map((item) => {
                 const Icon = item.icon;
@@ -618,243 +626,167 @@ export const Navbar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                style={{
-                  padding: 7,
-                  borderRadius: 8,
-                  background: '#f8fafc',
-                  border: '1.5px solid #e2e8f0',
-                  cursor: 'pointer',
-                  color: '#475569',
-                }}
+                aria-label={mobileMenuOpen ? "Close Navigation Menu" : "Open Navigation Menu"}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer flex items-center justify-center shadow-xs"
               >
-                {mobileMenuOpen ? <X style={{ width: 18, height: 18 }} /> : <Menu style={{ width: 18, height: 18 }} />}
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
 
           </div>
         </div>
 
-        {/* ── Mobile Drawer ── */}
+        {/* ── Mobile Drawer & Backdrop Overlay ── */}
         {mobileMenuOpen && (
-          <div
-            className="animate-slide-down"
-            style={{
-              borderTop: '1px solid #e2e8f0',
-              background: '#fff',
-              padding: '12px 16px 20px',
-            }}
-          >
-            {/* Language Switcher on mobile */}
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-              <LanguageSwitcher />
-            </div>
-            {/* User Info or Auth Callout */}
-            {isGuest ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <>
+            {/* Backdrop overlay */}
+            <div
+              className="fixed inset-0 top-[62px] bg-slate-950/40 backdrop-blur-xs z-40 md:hidden animate-fade-in"
+              onClick={() => setMobileMenuOpen(false)}
+              onTouchMove={(e) => e.preventDefault()}
+            />
+
+            {/* Mobile Navigation Drawer */}
+            <div
+              className="fixed top-[62px] left-0 right-0 z-50 md:hidden bg-white/98 backdrop-blur-md border-b border-slate-200 shadow-2xl max-h-[calc(100vh-62px)] overflow-y-auto overscroll-contain p-4 space-y-4 animate-slide-down"
+              style={{
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              {/* Language Switcher bar */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-500">Language / மொழி:</span>
+                <LanguageSwitcher />
+              </div>
+
+              {/* User Info or Auth Callout */}
+              {isGuest ? (
+                <div className="grid grid-cols-2 gap-2.5 pb-1">
                   <Link
                     to="/login"
                     onClick={() => setMobileMenuOpen(false)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '10px', borderRadius: 8,
-                      background: '#1d4ed8', color: '#fff',
-                      fontSize: 13, fontWeight: 800, textDecoration: 'none',
-                    }}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition-all"
                   >
-                    <LogIn style={{ width: 15, height: 15 }} />
-                    {t('nav.signIn')}
+                    <LogIn className="w-4 h-4" />
+                    <span>{t('nav.signIn')}</span>
                   </Link>
                   <Link
                     to="/register"
                     onClick={() => setMobileMenuOpen(false)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '10px', borderRadius: 8,
-                      background: '#f8fafc', color: '#0f172a', border: '1.5px solid #cbd5e1',
-                      fontSize: 13, fontWeight: 800, textDecoration: 'none',
-                    }}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold border border-slate-200 transition-all"
                   >
-                    <UserPlus style={{ width: 15, height: 15 }} />
-                    {t('nav.register')}
+                    <UserPlus className="w-4 h-4 text-slate-600" />
+                    <span>{t('nav.register')}</span>
                   </Link>
                 </div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  background: '#f8fafc',
-                  borderRadius: 10,
-                  marginBottom: 8,
-                  border: '1px solid #e2e8f0',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: roleColors.bg,
-                      border: `2px solid ${roleColors.dot}40`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 800, color: roleColors.text }}>
-                      {(currentUser?.name || currentUser?.organizationName || 'U').charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                      {currentUser?.name || currentUser?.organizationName || 'User'}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 10,
-                        color: roleColors.text,
-                        fontWeight: 700,
-                        margin: 0,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                      }}
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shrink-0"
+                      style={{ background: roleColors.bg, color: roleColors.text, border: `2px solid ${roleColors.dot}40` }}
                     >
-                      {getRoleLabel()}
-                    </p>
+                      {(currentUser?.name || currentUser?.organizationName || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="truncate max-w-[150px]">
+                      <p className="text-xs font-extrabold text-slate-900 truncate m-0">
+                        {currentUser?.name || currentUser?.organizationName || 'User'}
+                      </p>
+                      <span
+                        className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-block mt-0.5"
+                        style={{ background: roleColors.bg, color: roleColors.text }}
+                      >
+                        {getRoleLabel()}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <Link
-                  to={getDashboardLink()}
-                  onClick={() => setMobileMenuOpen(false)}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: 7,
-                    background: '#1d4ed8',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    textDecoration: 'none',
-                  }}
-                >
-                  {t('nav.portal')}
-                </Link>
-              </div>
-            )}
-
-            {/* Nav Links */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
-              {primaryLinks.map((item) => {
-                const Icon = item.icon;
-                return (
                   <Link
-                    key={item.name}
-                    to={item.href}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      textDecoration: 'none',
-                      ...(item.isEmergency
-                        ? { color: '#dc2626', background: '#fef2f2' }
-                        : { color: '#374151', background: 'transparent' }),
-                    }}
+                    to={getDashboardLink()}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold shadow-xs hover:bg-blue-700 transition-all"
                   >
-                    <Icon style={{ width: 16, height: 16 }} />
-                    <span>{item.name}</span>
+                    {t('nav.portal')}
                   </Link>
-                );
-              })}
-            </div>
+                </div>
+              )}
 
-            {/* Bottom Actions */}
-            <div
-              style={{
-                borderTop: '1px solid #f1f5f9',
-                paddingTop: 8,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setIsProfileModalOpen(true);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#374151',
-                  cursor: 'pointer',
-                  width: '100%',
-                  textAlign: 'left',
-                }}
-              >
-                <UserCircle style={{ width: 16, height: 16, color: '#94a3b8' }} />
-                <span>Edit Profile</span>
-              </button>
-              <Link
-                to="/settings"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#374151',
-                  textDecoration: 'none',
-                }}
-              >
-                <Settings style={{ width: 16, height: 16, color: '#94a3b8' }} />
-                <span>Settings</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  logout();
-                  navigate('/auth/login');
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: '#dc2626',
-                  cursor: 'pointer',
-                  width: '100%',
-                  textAlign: 'left',
-                }}
-              >
-                <LogOut style={{ width: 16, height: 16 }} />
-                <span>Sign Out</span>
-              </button>
+              {/* Main Navigation Pages Links */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 block mb-1">
+                  Navigation Pages
+                </span>
+                {primaryLinks.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                        item.isEmergency
+                          ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
+                          : isActive
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-4 h-4 ${item.isEmergency ? 'text-red-600 animate-pulse' : isActive ? 'text-blue-600' : 'text-slate-500'}`} />
+                        <span>{item.name}</span>
+                      </div>
+                      {item.isEmergency && (
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-red-600 text-white">
+                          Urgent
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* Profile & Settings (Only for logged-in users) */}
+              {!isGuest && (
+                <div className="pt-3 border-t border-slate-100 space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 block mb-1">
+                    Account Controls
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all text-left cursor-pointer"
+                  >
+                    <UserCircle className="w-4 h-4 text-slate-500" />
+                    <span>Edit Profile</span>
+                  </button>
+                  <Link
+                    to="/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all"
+                  >
+                    <Settings className="w-4 h-4 text-slate-500" />
+                    <span>Settings</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                      navigate('/login');
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-red-600" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          </>
         )}
       </header>
 

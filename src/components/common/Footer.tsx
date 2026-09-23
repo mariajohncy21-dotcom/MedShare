@@ -13,15 +13,10 @@ export const Footer: React.FC = () => {
       color: '#94a3b8',
       borderTop: '1px solid #1e293b',
     }}>
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '28px 24px 20px' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
-        {/* ── Main horizontal row ── */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '220px 1fr 1fr 1fr 180px',
-          gap: 32,
-          alignItems: 'flex-start',
-        }}>
+        {/* ── Main responsive grid ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 items-start">
 
           {/* Brand */}
           <div>

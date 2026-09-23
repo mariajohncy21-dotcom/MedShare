@@ -97,7 +97,7 @@ export const BulkUploadPage: React.FC = () => {
 
   return (
     <ConsoleLayout>
-      <div style={{ padding:'28px 32px', maxWidth:900, margin:'0 auto', fontFamily:'Inter, system-ui, sans-serif' }}>
+      <div className="console-page-container" style={{ maxWidth: 900, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
         {/* Back Link */}
         <div style={{ marginBottom: 16 }}>
@@ -115,17 +115,17 @@ export const BulkUploadPage: React.FC = () => {
         </div>
 
         {/* Header */}
-        <div style={{ marginBottom:28 }}>
-          <h1 style={{ fontSize:24, fontWeight:800, color:'#0f172a', margin:'0 0 6px' }}>
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>
             Bulk Inventory Upload
           </h1>
-          <p style={{ fontSize:13, color:'#64748b', margin:0 }}>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
             Upload a CSV file to import multiple medicines at once. All rows are validated before committing to your inventory.
           </p>
         </div>
 
         {/* Step indicator */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:28 }}>
+        <div className="mobile-tabs-scroll" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
           {[
             { id:'UPLOAD', label:'Upload CSV' },
             { id:'PREVIEW', label:'Validate' },
@@ -224,7 +224,7 @@ export const BulkUploadPage: React.FC = () => {
         {step === 'PREVIEW' && previewResult && (
           <div>
             {/* Summary */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               {[
                 { label:'Total Rows', value:previewResult.totalRows, color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe' },
                 { label:'Valid', value:previewResult.validRows, color:'#059669', bg:'#f0fdf4', border:'#bbf7d0' },
@@ -256,13 +256,13 @@ export const BulkUploadPage: React.FC = () => {
 
             {/* Valid rows preview */}
             {previewResult.valid.length > 0 && (
-              <div style={{ background:'#fff', borderRadius:14, border:'1px solid #e2e8f0', overflow:'hidden', marginBottom:20 }}>
+              <div className="table-responsive-wrapper" style={{ background:'#fff', borderRadius:14, border:'1px solid #e2e8f0', marginBottom:20 }}>
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:6 }}>
                   <CheckCircle2 style={{ width:14, height:14, color:'#059669' }} />
                   <span style={{ fontSize:13, fontWeight:700, color:'#059669' }}>{previewResult.valid.length} rows ready to import</span>
                 </div>
                 <div style={{ maxHeight:300, overflowY:'auto' }}>
-                  <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+                  <table style={{ width:'100%', minWidth: 480, borderCollapse:'collapse' as const, fontSize:12 }}>
                     <thead>
                       <tr style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
                         {['#','Medicine','Batch','Qty','Expiry','Price'].map(h=>(

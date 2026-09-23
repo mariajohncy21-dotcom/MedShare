@@ -73,7 +73,7 @@ export const PharmacyProfilePage: React.FC = () => {
 
   return (
     <ConsoleLayout>
-      <div style={{ padding: '24px 28px', maxWidth: 960, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div className="console-page-container" style={{ maxWidth: 960, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
         
         {/* Back Link */}
         <div style={{ marginBottom: 16 }}>
@@ -154,7 +154,7 @@ export const PharmacyProfilePage: React.FC = () => {
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden',
         }}>
           {!isEditing ? (
-            <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ padding: 'clamp(16px, 4vw, 32px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
               
               {/* Brand Top Row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 20, borderBottom: '1px solid #f1f5f9' }}>
@@ -235,9 +235,9 @@ export const PharmacyProfilePage: React.FC = () => {
 
             </div>
           ) : (
-            <form onSubmit={handleSave} style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <form onSubmit={handleSave} style={{ padding: 'clamp(16px, 4vw, 32px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="responsive-form-grid" style={{ gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>Pharmacy Name</label>
                   <input
@@ -258,7 +258,7 @@ export const PharmacyProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="responsive-form-grid" style={{ gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>Contact Phone Number</label>
                   <input
@@ -291,7 +291,7 @@ export const PharmacyProfilePage: React.FC = () => {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>City</label>
                   <input

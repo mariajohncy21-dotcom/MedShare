@@ -96,23 +96,23 @@ export const PatientDashboard: React.FC = () => {
 
   return (
     <ConsoleLayout>
-      <div style={{ padding: '28px 32px', maxWidth: 1100, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div className="console-page-container" style={{ maxWidth: 1100 }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <div style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
               background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <HeartPulse style={{ width: 18, height: 18, color: '#1d4ed8' }} />
             </div>
             <div>
-              <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <h1 style={{ fontSize: 'clamp(20px, 4vw, 24px)', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 {t('patient.welcome')}, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Patient'}
               </h1>
-              <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+              <p style={{ fontSize: 12.5, color: '#64748b', margin: 0 }}>
                 {t('patient.tagline')}
               </p>
             </div>
@@ -120,7 +120,7 @@ export const PatientDashboard: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-7">
           <StatCard label={t('patient.activeHoldsCount')} value={activeRes.length} icon={CalendarCheck} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
           <StatCard label={t('patient.myReservations')} value={myReservations.length} icon={Package} color="#0f766e" bg="#f0fdfa" border="#99f6e4" />
           <StatCard label={t('navigation.notifications')} value={unreadNotifs} icon={Bell} color="#d97706" bg="#fffbeb" border="#fde68a" />
@@ -131,7 +131,7 @@ export const PatientDashboard: React.FC = () => {
         <div style={{
           background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)',
           borderRadius: 16,
-          padding: '20px 24px',
+          padding: '16px clamp(12px, 3vw, 24px)',
           border: '1px solid #e2e8f0',
           boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
           marginBottom: 28,

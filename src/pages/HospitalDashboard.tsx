@@ -189,7 +189,7 @@ export const HospitalDashboard: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px) clamp(12px, 3vw, 24px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
@@ -198,26 +198,35 @@ export const HospitalDashboard: React.FC = () => {
               <Hospital style={{ width: 18, height: 18, color: '#7c3aed' }} />
             </div>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              <ShieldCheck style={{ width: 11, height: 11 }} />
-              Level-1 Trauma Hub
+              Hospital Emergency Node
+            </span>
+            <span style={{ fontSize: 11.5, color: '#6d28d9', background: '#f5f3ff', padding: '3px 9px', borderRadius: 6, fontWeight: 700 }}>
+              {(currentHospitalSource as any)?.hospitalType || currentHospitalSource?.type || 'HOSPITAL'}
             </span>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-            {currentHospitalSource?.name || currentUser.name}
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+            {currentHospitalSource?.name || currentUser.name || 'Tisaiyanvilai Government Hospital'}
           </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>ICU emergency broadcasts · Pharmacy dispatches · Ward inventory</p>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+            {currentHospitalSource?.address || 'Main Road, Tisaiyanvilai'} · Reg: {currentHospitalSource?.registrationNumber || 'HOSP-TN-2022-004'}
+          </p>
         </div>
+
         <button
           onClick={() => setActiveTab('EMERGENCY_CREATOR')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9, background: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(220,38,38,0.28)', whiteSpace: 'nowrap' }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '10px 18px', background: '#dc2626', color: '#fff',
+            fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 10,
+            cursor: 'pointer', boxShadow: '0 4px 12px rgba(220,38,38,0.25)',
+          }}
         >
-          <AlertOctagon style={{ width: 15, height: 15 }} />
           🚨 Dispatch Emergency Request
         </button>
       </div>
 
       {/* KPI Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }} className="lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Hospital Requests', value: hospitalDirectRequests.length, sub: 'Active stock dispatches', icon: AlertOctagon, color: '#dc2626', bg: '#fef2f2' },
           { label: 'Critical Shortages', value: criticalShortages.length, sub: 'Below critical threshold', icon: AlertTriangle, color: '#d97706', bg: '#fffbeb' },
@@ -238,7 +247,7 @@ export const HospitalDashboard: React.FC = () => {
       </div>
 
       {/* Tabs Navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, overflowX: 'auto' }}>
+      <div className="mobile-tabs-scroll" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12 }}>
         {[
           { key: 'EMERGENCY_CREATOR', label: '🚨 Emergency Request' },
           { key: 'REQUEST_TRACKER', label: `Dispatched (${hospitalDirectRequests.length})` },
@@ -486,8 +495,8 @@ export const HospitalDashboard: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="table-responsive-wrapper">
+            <table className="w-full text-left text-xs min-w-[580px]">
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">Medicine</th>
@@ -562,7 +571,7 @@ export const HospitalDashboard: React.FC = () => {
           {criticalShortages.length > 0 ? (
             <div className="space-y-3">
               {criticalShortages.map((med) => (
-                <div key={med.id} className="p-4 bg-red-50 rounded-2xl border border-red-200 flex items-center justify-between text-xs">
+                <div key={med.id} className="p-4 bg-red-50 rounded-2xl border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div>
                     <h4 className="font-extrabold text-red-900 text-sm">{med.name}</h4>
                     <p className="text-red-700 text-[11px]">
@@ -575,7 +584,7 @@ export const HospitalDashboard: React.FC = () => {
                       setReqMedicineId(med.id);
                       setActiveTab('EMERGENCY_CREATOR');
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs hover:bg-red-700 transition-colors"
+                    className="px-3.5 py-1.5 rounded-xl bg-red-600 text-white font-bold text-xs hover:bg-red-700 transition-colors self-start sm:self-auto cursor-pointer"
                   >
                     Request Stock Now
                   </button>
@@ -595,7 +604,7 @@ export const HospitalDashboard: React.FC = () => {
             <h3 className="font-extrabold text-slate-900 text-base">Inter-Facility Stock Transfers</h3>
             <button
               onClick={() => setIsTransferModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer"
             >
               Authorize Transfer
             </button>
@@ -603,13 +612,13 @@ export const HospitalDashboard: React.FC = () => {
 
           <div className="space-y-3">
             {hospitalTransfers.map((t) => (
-              <div key={t.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+              <div key={t.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <span className="font-mono text-blue-700 font-bold">{t.id}</span>
                   <h4 className="font-bold text-slate-900 mt-1">{t.quantity} units of {t.medicineName}</h4>
                   <p className="text-slate-500">From: {t.fromSourceName} → To: {t.toSourceName}</p>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-teal-100 text-teal-800 font-black">
+                <span className="px-3 py-1 rounded-full bg-teal-100 text-teal-800 font-black self-start sm:self-auto">
                   {t.status}
                 </span>
               </div>
@@ -620,8 +629,8 @@ export const HospitalDashboard: React.FC = () => {
 
       {/* ADD WARD STOCK MODAL */}
       {isAddStockOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-0 animate-scale-up">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white w-full max-w-[min(520px,94vw)] rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-0 animate-scale-up">
             <div className="p-6 bg-gradient-to-r from-indigo-700 to-blue-700 text-white relative">
               <button
                 onClick={() => setIsAddStockOpen(false)}

@@ -72,7 +72,7 @@ export const HospitalProfilePage: React.FC = () => {
 
   return (
     <ConsoleLayout>
-      <div style={{ padding: '24px 28px', maxWidth: 960, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div className="console-page-container" style={{ maxWidth: 960, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
         
         {/* Back Link */}
         <div style={{ marginBottom: 16 }}>
@@ -118,7 +118,7 @@ export const HospitalProfilePage: React.FC = () => {
               )}
             </div>
             <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-              State Drug Control accreditation, trauma wing credentials, and emergency dispatch location
+              Official clinical emergency node registration details and public coordinates
             </p>
           </div>
 
@@ -127,11 +127,11 @@ export const HospitalProfilePage: React.FC = () => {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '9px 16px', background: isEditing ? '#f1f5f9' : '#6d28d9',
-              color: isEditing ? '#475569' : '#fff', fontSize: 13, fontWeight: 700,
-              borderRadius: 8, border: isEditing ? '1px solid #e2e8f0' : 'none', cursor: 'pointer',
+              color: isEditing ? '#475569' : '#fff', fontWeight: 700, fontSize: 13,
+              border: isEditing ? '1px solid #cbd5e1' : 'none', borderRadius: 10, cursor: 'pointer',
             }}
           >
-            <Edit2 style={{ width: 14, height: 14 }} />
+            <Edit2 style={{ width: 15, height: 15 }} />
             {isEditing ? 'Cancel Edit' : 'Edit Profile'}
           </button>
         </div>
@@ -139,11 +139,11 @@ export const HospitalProfilePage: React.FC = () => {
         {successMessage && (
           <div style={{
             padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-            borderRadius: 10, color: '#065f46', fontSize: 13, fontWeight: 600,
-            marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8,
+            borderRadius: 12, fontSize: 13, color: '#047857', fontWeight: 700, marginBottom: 20,
+            display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            <CheckCircle2 style={{ width: 16, height: 16, color: '#059669' }} />
-            {successMessage}
+            <CheckCircle2 style={{ width: 16, height: 16 }} />
+            <span>{successMessage}</span>
           </div>
         )}
 
@@ -151,10 +151,10 @@ export const HospitalProfilePage: React.FC = () => {
           background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0',
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden',
         }}>
-          {/* Facility Banner */}
+          {/* Header Strip */}
           <div style={{
-            padding: '24px 28px', background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
-            borderBottom: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: 16,
+            padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 28px)', background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+            borderBottom: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
           }}>
             <div style={{
               width: 60, height: 60, borderRadius: 14,
@@ -175,8 +175,8 @@ export const HospitalProfilePage: React.FC = () => {
           </div>
 
           {/* Form or View */}
-          <form onSubmit={handleSave} style={{ padding: 28 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <form onSubmit={handleSave} style={{ padding: 'clamp(16px, 4vw, 28px)' }}>
+            <div className="responsive-form-grid" style={{ gap: 20 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>
                   Hospital Official Name

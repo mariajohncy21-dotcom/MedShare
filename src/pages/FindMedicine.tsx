@@ -113,6 +113,22 @@ export const FindMedicine: React.FC = () => {
 
   const currentMedicine = medicines.find(m => m.id === selectedMedicineId);
 
+  // Lock background body scroll and prevent background page/navbar scrolling while any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = isModalOpen || Boolean(detailsSource) || Boolean(routeSource);
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [isModalOpen, detailsSource, routeSource]);
+
   // Filtered medicines for autocomplete & catalog
   const filteredCatalog = medicines.filter((m) => {
     const matchesQuery =
@@ -364,7 +380,7 @@ export const FindMedicine: React.FC = () => {
     .sort((a, b) => a.distance - b.distance);
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px clamp(12px, 3vw, 24px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
@@ -991,8 +1007,8 @@ export const FindMedicine: React.FC = () => {
         )}
 
         {/* INTERACTIVE LEAFLET MAP (Requirement #11) */}
-        <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-slate-200/90 space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-3xl p-4 sm:p-7 shadow-sm border border-slate-200/90 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-black text-slate-900">
                 Interactive Emergency Map
@@ -1001,14 +1017,14 @@ export const FindMedicine: React.FC = () => {
                 Visualizing user location, verified dispensaries, and regional trauma units
               </p>
             </div>
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-              <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> User Pin
-              <span className="w-3 h-3 rounded-full bg-teal-600 inline-block ml-2" /> Pharmacy
-              <span className="w-3 h-3 rounded-full bg-indigo-600 inline-block ml-2" /> Hospital
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">
+              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> User Pin</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-teal-600 inline-block" /> Pharmacy</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-indigo-600 inline-block" /> Hospital</span>
             </div>
           </div>
 
-          <div className="h-[420px] rounded-2xl overflow-hidden border border-slate-200">
+          <div className="h-[320px] sm:h-[420px] rounded-2xl overflow-hidden border border-slate-200">
             <MedMap
               sources={sources.filter((s) => !s.isDeleted && s.accountStatus === 'ACTIVE')}
               inventories={inventory}
@@ -1023,8 +1039,22 @@ export const FindMedicine: React.FC = () => {
 
       {/* 15-MINUTE QR RESERVATION MODAL WITH PRESCRIPTION CHECKBOX */}
       {isModalOpen && selectedPlanToReserve && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-200">
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) e.preventDefault();
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-7 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto overscroll-contain"
+            style={{
+              overscrollBehavior: 'contain',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="text-[10px] font-extrabold uppercase text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">
@@ -1237,8 +1267,22 @@ export const FindMedicine: React.FC = () => {
 
       {/* FACILITY DETAILS MODAL */}
       {detailsSource && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDetailsSource(null);
+          }}
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) e.preventDefault();
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain"
+            style={{
+              overscrollBehavior: 'contain',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-extrabold text-slate-900 text-base">{detailsSource.source.name}</h3>
               <button

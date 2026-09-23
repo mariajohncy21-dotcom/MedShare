@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { ReservationStatus } from '../types';
@@ -26,6 +26,21 @@ export const Reservations: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'COLLECTED' | 'EXPIRED'>('ALL');
   const [expandedResId, setExpandedResId] = useState<string | null>(null);
   const [selectedQRReservation, setSelectedQRReservation] = useState<string | null>(null);
+
+  // Lock background body scroll while QR Pickup Pass modal is open
+  useEffect(() => {
+    if (selectedQRReservation) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [selectedQRReservation]);
 
   const filteredReservations = reservations.filter((res) => {
     if (filterStatus === 'ACTIVE') return res.status === 'CONFIRMED' || res.status === 'PENDING';
@@ -70,11 +85,11 @@ export const Reservations: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px) clamp(12px, 3vw, 24px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             {t('reservations.title')}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
@@ -83,7 +98,7 @@ export const Reservations: React.FC = () => {
         </div>
 
         {/* Filter Pills */}
-        <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-auto text-xs">
+        <div className="flex flex-wrap rounded-2xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-auto text-xs max-w-full gap-1">
           <button
             onClick={() => setFilterStatus('ALL')}
             className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
@@ -135,7 +150,7 @@ export const Reservations: React.FC = () => {
             return (
               <div
                 key={res.id}
-                className={`bg-white rounded-3xl p-6 shadow-sm border transition-all ${
+                className={`bg-white rounded-3xl p-4 sm:p-6 shadow-sm border transition-all ${
                   isActive ? 'border-blue-300 shadow-md ring-1 ring-blue-100' : 'border-slate-200'
                 }`}
               >
@@ -280,8 +295,22 @@ export const Reservations: React.FC = () => {
 
       {/* QR Code / Digital Verification Modal */}
       {selectedQRReservation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedQRReservation(null);
+          }}
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) e.preventDefault();
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 text-center shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto overscroll-contain"
+            style={{
+              overscrollBehavior: 'contain',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
             <h3 className="text-base font-bold text-slate-900 mb-1">{t('reservations.title')}</h3>
             <p className="text-xs text-slate-500 mb-4">{t('reservations.presentPass')}</p>
 

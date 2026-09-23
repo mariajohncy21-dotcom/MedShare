@@ -70,9 +70,9 @@ export const EmergencyRequestPage: React.FC = () => {
   const selectedMed = medicines.find((m) => m.id === selectedMedicineId);
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px clamp(12px, 3vw, 24px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Red Emergency Header */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-red-700 via-red-600 to-rose-700 text-white shadow-xl shadow-red-600/20 relative overflow-hidden">
+      <div className="p-5 sm:p-8 rounded-3xl bg-gradient-to-r from-red-700 via-red-600 to-rose-700 text-white shadow-xl shadow-red-600/20 relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-2">

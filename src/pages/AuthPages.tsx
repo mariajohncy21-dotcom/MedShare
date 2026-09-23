@@ -35,7 +35,7 @@ const AuthLayout: React.FC<{ children: React.ReactNode; maxWidth?: number }> = (
     alignItems: 'flex-start',
     justifyContent: 'center',
     background: '#f1f5f9',
-    padding: '48px 16px 64px',
+    padding: 'clamp(20px, 4vw, 48px) 12px clamp(28px, 6vw, 64px)',
   }}>
     <div style={{
       width: '100%',
@@ -233,7 +233,7 @@ export const LoginPage: React.FC = () => {
     <AuthLayout maxWidth={480}>
       {/* Top brand bar */}
       <div style={{
-        padding: '28px 32px 24px',
+        padding: '24px clamp(16px, 4vw, 32px) 20px',
         borderBottom: '1px solid #f1f5f9',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         textAlign: 'center', gap: 12,
@@ -250,7 +250,7 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* Form body */}
-      <div style={{ padding: '28px 32px' }}>
+      <div style={{ padding: '24px clamp(16px, 4vw, 32px)' }}>
         {errorMessage && <div style={{ marginBottom: 18 }}><ErrorBanner message={errorMessage} /></div>}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -548,7 +548,7 @@ export const RegisterPage: React.FC = () => {
     return (
       <AuthLayout maxWidth={560}>
         {/* Header */}
-        <div style={{ padding: '28px 32px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center' }}>
+        <div style={{ padding: '24px clamp(16px, 4vw, 32px) 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center' }}>
           <BrandMark />
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 900, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
@@ -558,7 +558,7 @@ export const RegisterPage: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ padding: '24px 32px' }}>
+        <div style={{ padding: '20px clamp(16px, 4vw, 32px)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {roles.map(({ role, icon: Icon, label, badge, desc, color, bg, border, cta }) => (
               <button
@@ -710,11 +710,11 @@ export const RegisterPage: React.FC = () => {
           </button>
         </div>
 
-        <div style={{ padding: '24px 32px' }}>
+        <div style={{ padding: '20px clamp(14px, 4vw, 32px)' }}>
           {errorMessage && <div style={{ marginBottom: 16 }}><ErrorBanner message={errorMessage} /></div>}
 
           {patientStep === 1 ? (
-            <form onSubmit={handlePatientStep1Next} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <form onSubmit={handlePatientStep1Next} className="responsive-form-grid">
               <FieldWrapper label="Full Name">
                 <StyledInput type="text" required placeholder="e.g. Rahul Sharma" value={patientData.name}
                   onChange={e => setPatientData({ ...patientData, name: e.target.value })} />
@@ -908,12 +908,12 @@ export const RegisterPage: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ padding: '24px 32px' }}>
+      <div style={{ padding: '20px clamp(14px, 4vw, 32px)' }}>
         {errorMessage && <div style={{ marginBottom: 16 }}><ErrorBanner message={errorMessage} /></div>}
 
         {/* STEP 1 */}
         {currentStep === 1 && (
-          <form onSubmit={handleFacilityStep1Next} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <form onSubmit={handleFacilityStep1Next} className="responsive-form-grid">
             <FieldWrapper label={`${roleTitle} Name`} colSpan>
               <StyledInput type="text" required
                 placeholder={isHospital ? 'e.g. Grace Multi-Speciality Hospital & Trauma Care' : 'e.g. Apollo Pharmacy – Tisaiyanvilai'}
@@ -961,7 +961,7 @@ export const RegisterPage: React.FC = () => {
 
         {/* STEP 2 */}
         {currentStep === 2 && (
-          <form onSubmit={handleFacilityFinalSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <form onSubmit={handleFacilityFinalSubmit} className="responsive-form-grid">
             <FieldWrapper label={isHospital ? 'Hospital Accreditation Number' : 'Pharmacy Drug License Number'}>
               <StyledInput type="text" required monospace
                 placeholder={isHospital ? 'TN-HOSP-2024-XXXX' : 'TN-PHARM-2024-XXXX'}

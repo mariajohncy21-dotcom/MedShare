@@ -90,18 +90,18 @@ export const AdminDashboardPage: React.FC = () => {
 
   return (
     <ConsoleLayout>
-      <div style={{ padding:'24px 28px', maxWidth:1300, margin:'0 auto', fontFamily:'Inter, system-ui, sans-serif' }}>
+      <div className="console-page-container" style={{ maxWidth: 1300, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
         {/* Header */}
-        <div style={{ marginBottom:24 }}>
-          <h1 style={{ fontSize:24, fontWeight:800, color:'#0f172a', margin:'0 0 4px' }}>{t('admin.dashboardTitle')}</h1>
-          <p style={{ fontSize:13, color:'#64748b', margin:0 }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 4px' }}>{t('admin.dashboardTitle')}</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
             MedShare Network Administration · Tisaiyanvilai, Tamil Nadu
           </p>
         </div>
 
         {/* Stats */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(185px,1fr))', gap:12, marginBottom:24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: 12, marginBottom: 24 }}>
           <StatCard label={t('admin.totalPharmacies')} value={pharmacies.length} icon={Building2} color="#1d4ed8" bg="#eff6ff" border="#bfdbfe" />
           <StatCard label={t('admin.totalHospitals')} value={hospitals.length} icon={Hospital} color="#6d28d9" bg="#f5f3ff" border="#ddd6fe" />
           <StatCard label={t('admin.pendingVerifications')} value={pending.length} icon={Clock} color="#d97706" bg="#fffbeb" border="#fde68a" />
@@ -111,18 +111,18 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div style={{ display:'flex', gap:4, borderBottom:'2px solid #f1f5f9', marginBottom:20, overflowX:'auto' }}>
+        <div className="mobile-tabs-scroll" style={{ display: 'flex', gap: 4, borderBottom: '2px solid #f1f5f9', marginBottom: 20 }}>
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{
-              padding:'9px 18px', borderRadius:'8px 8px 0 0', border:'none', cursor:'pointer', whiteSpace:'nowrap',
-              background: activeTab===tab.id ? '#fff' : 'transparent',
-              color: activeTab===tab.id ? '#9d174d' : '#64748b',
-              fontWeight: activeTab===tab.id ? 700 : 500, fontSize:13,
-              borderBottom: activeTab===tab.id ? '2px solid #9d174d' : '2px solid transparent',
+              padding: '9px 18px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+              background: activeTab === tab.id ? '#fff' : 'transparent',
+              color: activeTab === tab.id ? '#9d174d' : '#64748b',
+              fontWeight: activeTab === tab.id ? 700 : 500, fontSize: 13,
+              borderBottom: activeTab === tab.id ? '2px solid #9d174d' : '2px solid transparent',
             }}>
               {tab.label}
               {tab.id === 'VERIFICATION' && pending.length > 0 && (
-                <span style={{ marginLeft:6, background:'#dc2626', color:'#fff', fontSize:10, fontWeight:800, padding:'1px 6px', borderRadius:99 }}>{pending.length}</span>
+                <span style={{ marginLeft: 6, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99 }}>{pending.length}</span>
               )}
             </button>
           ))}
@@ -250,8 +250,8 @@ export const AdminDashboardPage: React.FC = () => {
               ))}
             </div>
 
-            <div style={{ background:'#fff', borderRadius:14, border:'1px solid #e2e8f0', overflow:'hidden' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:13 }}>
+            <div className="table-responsive-wrapper" style={{ background:'#fff', borderRadius:14, border:'1px solid #e2e8f0' }}>
+              <table style={{ width:'100%', minWidth: 640, borderCollapse:'collapse' as const, fontSize:13 }}>
                 <thead>
                   <tr style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
                     {['Organization','Type','Location','Status','Verification','Actions'].map(h=>(
@@ -378,11 +378,11 @@ export const AdminDashboardPage: React.FC = () => {
             )}
 
             {/* Table */}
-            <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div className="table-responsive-wrapper" style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0' }}>
               {adminDrLoading ? (
                 <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading daily report monitoring state…</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <table style={{ width: '100%', minWidth: 540, borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                       {['Organization', 'Reporting Date', 'Submitted At', 'Submission Status'].map(h => (
